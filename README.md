@@ -45,3 +45,4 @@ Variáveis de ambiente necessárias estão documentadas em
 "# painelarkano"  
 "# arkanopainel"  
 "# arkanopainel"  
+"# arkanopainel"  
