@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    name: Typecheck · lint · unit tests · branding
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bunx tsgo --noEmit
+      - name: Lint
+        run: bun run lint
+      - name: Unit tests
+        run: bun run test:unit
+      - name: Branding guard (source)
+        run: bun run check:branding
+      - name: Supabase grants guard (is_staff_or_admin / has_role)
+        run: bun run check:grants
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: SECURITY DEFINER EXECUTE guard (reproduz SUPA_anon_security_definer_function_executable)
+        run: bun run check:secdef
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Security scan (consolidado, gera relatório JSON)
+        if: always()
+        run: bun run security:scan
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Upload security scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-report
+          path: security-scan-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  build-and-scan:
+    name: Build · post-build branding scan
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build (runs pre/post branding guards automatically)
+        run: bun run build
+      - name: Explicit dist branding scan
+        run: bun run check:branding:dist
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: |
+            dist
+            .output
+          if-no-files-found: ignore
+          retention-days: 3
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+      - name: Start dev server
+        run: bun run dev &
+        env:
+          PORT: 8080
+      - name: Wait for dev server
+        run: |
+          for i in {1..40}; do
+            curl -sf http://localhost:8080/auth > /dev/null && exit 0
+            sleep 1
+          done
+          echo "dev server did not become ready" >&2
+          exit 1
+      - name: Run E2E tests
+        run: bun run test:e2e
+        env:
+          PW_BASE_URL: http://localhost:8080
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7

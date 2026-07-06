@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "bun install --frozen-lockfile",
+  "buildCommand": "bun run build",
+  "framework": null,
+  "outputDirectory": ".vercel/output",
+  "regions": ["gru1"],
+  "github": {
+    "silent": true
+  }
+}
