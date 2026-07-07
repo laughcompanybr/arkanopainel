@@ -1,4 +1,4 @@
-# Pulso Nobre
+# Arkano Club
 
 Painel executivo proprietário — gestão de pedidos, clientes, financeiro e operações.
 
