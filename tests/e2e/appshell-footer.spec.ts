@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * Verifies the "Developed by Laugh" authorship strip is present on the
+ * Verifies the "Developed by Laugh Company" authorship strip is present on the
  * login shell (public) and, when a session is present, on the AppShell
  * across mobile + desktop viewports.
  *
@@ -11,9 +11,9 @@ import { expect, test } from "@playwright/test";
  */
 
 test.describe("Authorship footer — public", () => {
-  test("login shell shows 'Developed by Laugh'", async ({ page }) => {
+  test("login shell shows 'Developed by Laugh Company'", async ({ page }) => {
     await page.goto("/auth");
-    await expect(page.getByText(/Developed by Laugh/i)).toBeVisible();
+    await expect(page.getByText(/Developed by Laugh Company/i)).toBeVisible();
   });
 });
 
@@ -37,7 +37,7 @@ test.describe("Authorship footer — AppShell", () => {
   for (const route of AUTHENTICATED_ROUTES) {
     test(`footer is visible at ${route}`, async ({ page }) => {
       await page.goto(route);
-      const footer = page.locator("footer").filter({ hasText: /Developed by Laugh/i });
+      const footer = page.locator("footer").filter({ hasText: /Developed by Laugh Company/i });
       await expect(footer).toBeVisible();
       await expect(footer).toContainText(/Arkano Club/i);
     });

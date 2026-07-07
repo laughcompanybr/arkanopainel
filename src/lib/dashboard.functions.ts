@@ -10,6 +10,19 @@ export interface DashboardStats {
   clientsTotal: number;
   avgTicket: number;
   avgProfit: number;
+  commissionMonth: number;
+  cardFeesMonth: number;
+  shippingMonth: number;
+  receivedMonth: number;
+  pendingMonth: number;
+  watchesSoldMonth: number;
+  monthComparison: {
+    revenuePrev: number;
+    profitPrev: number;
+    revenueDelta: number;
+    profitDelta: number;
+  };
+  topProducts: Array<{ label: string; quantity: number; revenue: number }>;
   pipeline: {
     awaitingPayment: number;
     inTransit: number;
@@ -25,6 +38,7 @@ export interface DashboardStats {
     created_at: string;
   }>;
 }
+
 
 const PIPELINE_AWAITING = new Set([
   "new",
@@ -47,7 +61,9 @@ export const getDashboardStats = createServerFn({ method: "GET" })
     const [ordersRes, clientsRes, paymentsRes, expensesRes, eventsRes] = await Promise.all([
       supabase
         .from("orders")
-        .select("id, order_number, status, sale_price, cost_price, amount_received, created_at")
+        .select(
+          "id, order_number, status, brand, model, sale_price, cost_price, amount_received, quantity, commission, card_fee, shipping, other_costs, created_at",
+        )
         .is("deleted_at", null),
       supabase.from("clients").select("id", { count: "exact", head: true }).is("deleted_at", null),
       supabase.from("payments").select("direction, amount, paid_at"),
@@ -80,18 +96,33 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       });
     }
     const monthIndex = new Map(months.map((m, i) => [m.key, i]));
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
 
     let revenueMonth = 0;
     let profitMonth = 0;
     let receivable = 0;
     let ordersMonth = 0;
+    let commissionMonth = 0;
+    let cardFeesMonth = 0;
+    let shippingMonth = 0;
+    let receivedMonth = 0;
+    let pendingMonth = 0;
+    let watchesSoldMonth = 0;
     const pipeline = { awaitingPayment: 0, inTransit: 0, delivered: 0 };
+    const productTally = new Map<string, { quantity: number; revenue: number }>();
 
     for (const o of orders) {
-      const sale = Number(o.sale_price ?? 0);
-      const cost = Number(o.cost_price ?? 0);
+      const qty = Number((o as { quantity?: number }).quantity ?? 1) || 1;
+      const sale = Number(o.sale_price ?? 0) * qty;
+      const cost = Number(o.cost_price ?? 0) * qty;
       const received = Number(o.amount_received ?? 0);
-      const profit = sale - cost;
+      const commission = Number((o as { commission?: number }).commission ?? 0);
+      const cardFee = Number((o as { card_fee?: number }).card_fee ?? 0);
+      const shipping = Number((o as { shipping?: number }).shipping ?? 0);
+      const otherCosts = Number((o as { other_costs?: number }).other_costs ?? 0);
+      const profit = sale - cost - commission - cardFee - shipping - otherCosts;
       const created = new Date(o.created_at);
       const key = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}`;
       const idx = monthIndex.get(key);
@@ -103,12 +134,25 @@ export const getDashboardStats = createServerFn({ method: "GET" })
           months[idx].profit += profit;
           months[idx].orders += 1;
         }
-        if (created.toISOString() >= startOfMonth) {
+        if (key === currentKey) {
           revenueMonth += sale;
           profitMonth += profit;
           ordersMonth += 1;
+          commissionMonth += commission;
+          cardFeesMonth += cardFee;
+          shippingMonth += shipping;
+          receivedMonth += received;
+          pendingMonth += Math.max(sale - received, 0);
+          watchesSoldMonth += qty;
+          const label = [
+            (o as { brand?: string }).brand,
+            (o as { model?: string }).model,
+          ].filter(Boolean).join(" ") || "Sem descrição";
+          const cur = productTally.get(label) ?? { quantity: 0, revenue: 0 };
+          cur.quantity += qty;
+          cur.revenue += sale;
+          productTally.set(label, cur);
         }
-        // Receivable: pending balance on non-cancelled non-delivered orders
         if (status !== "delivered") {
           receivable += Math.max(sale - received, 0);
         }
@@ -134,13 +178,29 @@ export const getDashboardStats = createServerFn({ method: "GET" })
     }
 
     const nonCancelled = orders.filter((o) => String(o.status) !== "cancelled");
-    const totalRevenue = nonCancelled.reduce((s, o) => s + Number(o.sale_price ?? 0), 0);
+    const totalRevenue = nonCancelled.reduce((s, o) => s + Number(o.sale_price ?? 0) * Number((o as { quantity?: number }).quantity ?? 1), 0);
     const totalProfit = nonCancelled.reduce(
-      (s, o) => s + (Number(o.sale_price ?? 0) - Number(o.cost_price ?? 0)),
+      (s, o) => {
+        const q = Number((o as { quantity?: number }).quantity ?? 1);
+        return s + (Number(o.sale_price ?? 0) * q - Number(o.cost_price ?? 0) * q);
+      },
       0,
     );
     const avgTicket = nonCancelled.length ? totalRevenue / nonCancelled.length : 0;
     const avgProfit = nonCancelled.length ? totalProfit / nonCancelled.length : 0;
+
+    const prevBucket = months.find((m) => m.key === prevKey);
+    const monthComparison = {
+      revenuePrev: prevBucket?.revenue ?? 0,
+      profitPrev: prevBucket?.profit ?? 0,
+      revenueDelta: (prevBucket?.revenue ?? 0) > 0 ? ((revenueMonth - (prevBucket?.revenue ?? 0)) / (prevBucket?.revenue ?? 1)) * 100 : 0,
+      profitDelta: (prevBucket?.profit ?? 0) !== 0 ? ((profitMonth - (prevBucket?.profit ?? 0)) / Math.abs(prevBucket?.profit ?? 1)) * 100 : 0,
+    };
+
+    const topProducts = Array.from(productTally.entries())
+      .map(([label, v]) => ({ label, quantity: v.quantity, revenue: v.revenue }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5);
 
     const activity = (eventsRes.data ?? []).map((row) => {
       const rel = row as unknown as {
@@ -170,6 +230,14 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       clientsTotal: clientsRes.count ?? 0,
       avgTicket,
       avgProfit,
+      commissionMonth,
+      cardFeesMonth,
+      shippingMonth,
+      receivedMonth,
+      pendingMonth,
+      watchesSoldMonth,
+      monthComparison,
+      topProducts,
       pipeline,
       monthly: months.map(({ label, revenue, profit, orders: o }) => ({
         month: label,
@@ -180,3 +248,4 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       activity,
     };
   });
+

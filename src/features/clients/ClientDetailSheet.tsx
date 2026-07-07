@@ -27,6 +27,8 @@ import {
 import { ClientForm } from "./ClientForm";
 import { formatBRL, formatDate } from "@/lib/format";
 import type { ClientPayload } from "./schemas";
+import { STATUS_LABEL, STATUS_TONE, type OrderStatus } from "@/features/orders/schemas";
+
 
 interface Props {
   clientId: string | null;
@@ -177,6 +179,12 @@ export function ClientDetailSheet({ clientId, open, onOpenChange }: Props) {
                     phone: client.phone ?? "",
                     whatsapp: client.whatsapp ?? "",
                     instagram: client.instagram ?? "",
+                    zip: client.zip ?? "",
+                    street: client.street ?? "",
+                    number: client.number ?? "",
+                    complement: client.complement ?? "",
+                    district: client.district ?? "",
+                    reference: client.reference ?? "",
                     city: client.city ?? "",
                     state: client.state ?? "",
                     notes: client.notes ?? "",
@@ -185,6 +193,7 @@ export function ClientDetailSheet({ clientId, open, onOpenChange }: Props) {
                   onSubmit={async (v) => { await updateMut.mutateAsync(v); }}
                   onCancel={() => setEditing(false)}
                 />
+
               ) : (
                 <div className="space-y-4">
                   <div className="flex justify-end">
@@ -197,6 +206,13 @@ export function ClientDetailSheet({ clientId, open, onOpenChange }: Props) {
                     <Info label="Telefone" value={client.phone} />
                     <Info label="WhatsApp" value={client.whatsapp} />
                     <Info label="Instagram" value={client.instagram ? `@${client.instagram}` : null} />
+                    <Info label="CEP" value={client.zip} />
+                    <Info
+                      label="Endereço"
+                      value={[client.street, client.number, client.complement].filter(Boolean).join(", ") || null}
+                    />
+                    <Info label="Bairro" value={client.district} />
+                    <Info label="Referência" value={client.reference} />
                     <Info label="Cidade" value={client.city} />
                     <Info label="UF" value={client.state} />
                     <Info label="Criado em" value={formatDate(client.created_at)} />
@@ -208,6 +224,7 @@ export function ClientDetailSheet({ clientId, open, onOpenChange }: Props) {
                       <p className="mt-1 whitespace-pre-wrap">{client.notes}</p>
                     </div>
                   ) : null}
+
                 </div>
               )}
             </TabsContent>
@@ -263,21 +280,40 @@ export function ClientDetailSheet({ clientId, open, onOpenChange }: Props) {
             <TabsContent value="orders" className="mt-4">
               {query.data?.orders.length ? (
                 <ul className="divide-y divide-border rounded-lg border border-border">
-                  {query.data.orders.map((o) => (
-                    <li key={o.id} className="flex items-center justify-between p-3 text-sm">
-                      <div>
-                        <p className="font-medium">Pedido #{o.order_number ?? "—"}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(o.created_at)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">{formatBRL(o.sale_price)}</p>
-                        <Badge variant="outline" className="text-[10px]">{o.status}</Badge>
-                      </div>
-                    </li>
-                  ))}
+                  {query.data.orders.map((o) => {
+                    const photo = query.data?.orderPhotos?.[o.id];
+                    const label = STATUS_LABEL[o.status as OrderStatus] ?? o.status;
+                    const tone = STATUS_TONE[o.status as OrderStatus] ?? "";
+                    const desc = [o.brand, o.model].filter(Boolean).join(" ") || "Relógio";
+                    return (
+                      <li key={o.id} className="flex items-center gap-3 p-3 text-sm">
+                        <div className="size-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/30">
+                          {photo ? (
+                            <img src={photo} alt={desc} className="h-full w-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="grid h-full w-full place-items-center text-muted-foreground">
+                              <Package className="size-5" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{desc}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Pedido #{o.order_number ?? "—"} · {formatDate(o.created_at)}
+                            {o.quantity && o.quantity > 1 ? ` · Qtd ${o.quantity}` : ""}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{formatBRL(o.sale_price)}</p>
+                          <Badge className={`text-[10px] ${tone}`}>{label}</Badge>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="py-8 text-center text-sm text-muted-foreground">Nenhum pedido registrado.</p>
+
               )}
             </TabsContent>
 

@@ -121,46 +121,118 @@ export type Database = {
       clients: {
         Row: {
           city: string | null
+          complement: string | null
           cpf: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          district: string | null
           id: string
           instagram: string | null
           name: string
           notes: string | null
+          number: string | null
           phone: string | null
+          reference: string | null
           state: string | null
+          street: string | null
           updated_at: string
           whatsapp: string | null
+          zip: string | null
         }
         Insert: {
           city?: string | null
+          complement?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          district?: string | null
           id?: string
           instagram?: string | null
           name: string
           notes?: string | null
+          number?: string | null
           phone?: string | null
+          reference?: string | null
           state?: string | null
+          street?: string | null
           updated_at?: string
           whatsapp?: string | null
+          zip?: string | null
         }
         Update: {
           city?: string | null
+          complement?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          district?: string | null
           id?: string
           instagram?: string | null
           name?: string
           notes?: string | null
+          number?: string | null
           phone?: string | null
+          reference?: string | null
           state?: string | null
+          street?: string | null
+          updated_at?: string
+          whatsapp?: string | null
+          zip?: string | null
+        }
+        Relationships: []
+      }
+      employees: {
+        Row: {
+          base_salary: number | null
+          commission_percent: number | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          email: string | null
+          full_name: string
+          hire_date: string | null
+          id: string
+          notes: string | null
+          phone: string | null
+          role: string | null
+          status: string
+          updated_at: string
+          whatsapp: string | null
+        }
+        Insert: {
+          base_salary?: number | null
+          commission_percent?: number | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          email?: string | null
+          full_name: string
+          hire_date?: string | null
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Update: {
+          base_salary?: number | null
+          commission_percent?: number | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          email?: string | null
+          full_name?: string
+          hire_date?: string | null
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          status?: string
           updated_at?: string
           whatsapp?: string | null
         }
@@ -175,6 +247,7 @@ export type Database = {
           description: string | null
           id: string
           incurred_at: string
+          receipt_url: string | null
         }
         Insert: {
           amount: number
@@ -184,6 +257,7 @@ export type Database = {
           description?: string | null
           id?: string
           incurred_at?: string
+          receipt_url?: string | null
         }
         Update: {
           amount?: number
@@ -193,6 +267,94 @@ export type Database = {
           description?: string | null
           id?: string
           incurred_at?: string
+          receipt_url?: string | null
+        }
+        Relationships: []
+      }
+      financial_transactions: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          direction: Database["public"]["Enums"]["fin_direction"]
+          due_date: string | null
+          id: string
+          method: string | null
+          notes: string | null
+          paid_at: string | null
+          receipt_url: string | null
+          status: Database["public"]["Enums"]["fin_tx_status"]
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          direction: Database["public"]["Enums"]["fin_direction"]
+          due_date?: string | null
+          id?: string
+          method?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          receipt_url?: string | null
+          status?: Database["public"]["Enums"]["fin_tx_status"]
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          direction?: Database["public"]["Enums"]["fin_direction"]
+          due_date?: string | null
+          id?: string
+          method?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          receipt_url?: string | null
+          status?: Database["public"]["Enums"]["fin_tx_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          month: string
+          notes: string | null
+          orders_target: number
+          profit_target: number
+          sales_target: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month: string
+          notes?: string | null
+          orders_target?: number
+          profit_target?: number
+          sales_target?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month?: string
+          notes?: string | null
+          orders_target?: number
+          profit_target?: number
+          sales_target?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -306,21 +468,36 @@ export type Database = {
         Row: {
           amount_received: number
           brand: string | null
+          card_fee: number
           client_id: string | null
+          commission: number
           cost_price: number
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          employee_id: string | null
           expected_delivery: string | null
           id: string
           model: string | null
           notes: string | null
           order_number: number
+          other_costs: number
           payment_method: string | null
+          photo_path: string | null
           profit: number | null
           purchase_date: string | null
+          quantity: number
           reference: string | null
           sale_price: number
+          ship_city: string | null
+          ship_complement: string | null
+          ship_district: string | null
+          ship_number: string | null
+          ship_reference: string | null
+          ship_state: string | null
+          ship_street: string | null
+          ship_zip: string | null
+          shipping: number
           status: Database["public"]["Enums"]["order_status"]
           supplier_id: string | null
           tracking_code: string | null
@@ -329,21 +506,36 @@ export type Database = {
         Insert: {
           amount_received?: number
           brand?: string | null
+          card_fee?: number
           client_id?: string | null
+          commission?: number
           cost_price?: number
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          employee_id?: string | null
           expected_delivery?: string | null
           id?: string
           model?: string | null
           notes?: string | null
           order_number?: number
+          other_costs?: number
           payment_method?: string | null
+          photo_path?: string | null
           profit?: number | null
           purchase_date?: string | null
+          quantity?: number
           reference?: string | null
           sale_price?: number
+          ship_city?: string | null
+          ship_complement?: string | null
+          ship_district?: string | null
+          ship_number?: string | null
+          ship_reference?: string | null
+          ship_state?: string | null
+          ship_street?: string | null
+          ship_zip?: string | null
+          shipping?: number
           status?: Database["public"]["Enums"]["order_status"]
           supplier_id?: string | null
           tracking_code?: string | null
@@ -352,21 +544,36 @@ export type Database = {
         Update: {
           amount_received?: number
           brand?: string | null
+          card_fee?: number
           client_id?: string | null
+          commission?: number
           cost_price?: number
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          employee_id?: string | null
           expected_delivery?: string | null
           id?: string
           model?: string | null
           notes?: string | null
           order_number?: number
+          other_costs?: number
           payment_method?: string | null
+          photo_path?: string | null
           profit?: number | null
           purchase_date?: string | null
+          quantity?: number
           reference?: string | null
           sale_price?: number
+          ship_city?: string | null
+          ship_complement?: string | null
+          ship_district?: string | null
+          ship_number?: string | null
+          ship_reference?: string | null
+          ship_state?: string | null
+          ship_street?: string | null
+          ship_zip?: string | null
+          shipping?: number
           status?: Database["public"]["Enums"]["order_status"]
           supplier_id?: string | null
           tracking_code?: string | null
@@ -381,6 +588,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "orders_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "orders_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -392,41 +606,63 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          card_fee: number
+          card_fee_percent: number | null
           created_at: string
           created_by: string | null
           direction: Database["public"]["Enums"]["payment_direction"]
+          employee_id: string | null
           id: string
+          installments: number | null
           method: string | null
           notes: string | null
           order_id: string | null
           paid_at: string
+          receipt_url: string | null
           updated_at: string
         }
         Insert: {
           amount: number
+          card_fee?: number
+          card_fee_percent?: number | null
           created_at?: string
           created_by?: string | null
           direction: Database["public"]["Enums"]["payment_direction"]
+          employee_id?: string | null
           id?: string
+          installments?: number | null
           method?: string | null
           notes?: string | null
           order_id?: string | null
           paid_at?: string
+          receipt_url?: string | null
           updated_at?: string
         }
         Update: {
           amount?: number
+          card_fee?: number
+          card_fee_percent?: number | null
           created_at?: string
           created_by?: string | null
           direction?: Database["public"]["Enums"]["payment_direction"]
+          employee_id?: string | null
           id?: string
+          installments?: number | null
           method?: string | null
           notes?: string | null
           order_id?: string | null
           paid_at?: string
+          receipt_url?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_order_id_fkey"
             columns: ["order_id"]
@@ -548,6 +784,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "staff"
+      fin_direction: "in" | "out"
+      fin_tx_status: "pending" | "paid" | "overdue" | "cancelled"
       order_status:
         | "new"
         | "awaiting_deposit"
@@ -558,6 +796,9 @@ export type Database = {
         | "ready_delivery"
         | "delivered"
         | "cancelled"
+        | "partial_payment"
+        | "separating"
+        | "shipped"
       payment_direction: "in" | "out"
     }
     CompositeTypes: {
@@ -687,6 +928,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "staff"],
+      fin_direction: ["in", "out"],
+      fin_tx_status: ["pending", "paid", "overdue", "cancelled"],
       order_status: [
         "new",
         "awaiting_deposit",
@@ -697,6 +940,9 @@ export const Constants = {
         "ready_delivery",
         "delivered",
         "cancelled",
+        "partial_payment",
+        "separating",
+        "shipped",
       ],
       payment_direction: ["in", "out"],
     },

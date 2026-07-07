@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 // xlsx / jspdf are lazy-loaded inside the export handlers to keep the initial bundle small.
 import {
@@ -357,14 +358,33 @@ function ReportsPage() {
 
       <Card>
         <CardHeader><CardTitle>Volume de pedidos por mês</CardTitle></CardHeader>
-        <CardContent className="h-64">
-          {monthly.length ? (
+        <CardContent className="h-72">
+          {isLoading ? (
+            <Skeleton className="h-full w-full" />
+          ) : monthly.length ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthly}>
+              <BarChart data={monthly} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                <XAxis dataKey="key" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                <XAxis
+                  dataKey="key"
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v: string) => {
+                    const [y, m] = v.split("-");
+                    const d = new Date(Number(y), Number(m) - 1, 1);
+                    return format(d, "MMM/yy", { locale: ptBR });
+                  }}
+                />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip
+                  formatter={(v: number) => [formatNumber(v), "Pedidos"]}
+                  labelFormatter={(v: string) => {
+                    const [y, m] = v.split("-");
+                    const d = new Date(Number(y), Number(m) - 1, 1);
+                    return format(d, "MMMM 'de' yyyy", { locale: ptBR });
+                  }}
+                  contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="orders" name="Pedidos" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Branding guard — fails the build if forbidden authorship strings appear
- * anywhere the product ships from. Developed by Laugh.
+ * anywhere the product ships from. Developed by Laugh Company
  *
  * Scans: src/, index.html (if present), README.md, package.json.
  * Skips: node_modules, build output, auto-generated integration files,

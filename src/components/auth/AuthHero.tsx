@@ -131,7 +131,7 @@ export function AuthHero({ eyebrow, title, highlight, tagline, children }: AuthH
               Acesso restrito. Novos usuários são provisionados exclusivamente pelo administrador.
             </p>
             <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground/70">
-              Developed by Laugh
+              Developed by Laugh Company
             </p>
           </div>
         </section>

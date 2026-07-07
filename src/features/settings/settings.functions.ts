@@ -2,6 +2,40 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+const CARD_FEE_KEY = "card_fee_percent";
+
+export const getCardFeePercent = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", CARD_FEE_KEY)
+      .maybeSingle();
+    if (error) throw error;
+    const value = (data?.value ?? {}) as { percent?: number };
+    return { percent: Number(value.percent ?? 3.49) };
+  });
+
+export const setCardFeePercent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v) => z.object({ percent: z.number().min(0).max(100) }).parse(v))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert(
+        {
+          key: CARD_FEE_KEY,
+          value: { percent: data.percent },
+          description: "Taxa % padrão do cartão de crédito",
+          updated_by: context.userId,
+        } as never,
+        { onConflict: "key" },
+      );
+    if (error) throw error;
+    return { ok: true, percent: data.percent };
+  });
+
 export const getProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

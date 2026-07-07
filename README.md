@@ -2,7 +2,7 @@
 
 Painel executivo proprietário — gestão de pedidos, clientes, financeiro e operações.
 
-**Developed by Laugh.**
+**Developed by Laugh Company**
 
 ## Stack
 
@@ -42,8 +42,3 @@ Variáveis de ambiente necessárias estão documentadas em
 ---
 
 © Laugh. Todos os direitos reservados.
-"# painelarkano"  
-"# arkanopainel"  
-"# arkanopainel"  
-"# arkanopainel"  
-"# arkanopainel"  

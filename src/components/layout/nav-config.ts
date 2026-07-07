@@ -6,6 +6,7 @@ import {
   Wallet,
   FileBarChart,
   Settings,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
   { title: "Pedidos", to: "/pedidos", icon: Package, group: "operação" },
   { title: "Clientes", to: "/clientes", icon: Users, group: "gestão" },
   { title: "Fornecedores", to: "/fornecedores", icon: Truck, group: "gestão" },
+  { title: "Funcionários", to: "/funcionarios", icon: UsersRound, group: "gestão" },
   { title: "Financeiro", to: "/financeiro", icon: Wallet, group: "gestão" },
   { title: "Relatórios", to: "/relatorios", icon: FileBarChart, group: "gestão" },
   { title: "Configurações", to: "/configuracoes", icon: Settings, group: "sistema" },

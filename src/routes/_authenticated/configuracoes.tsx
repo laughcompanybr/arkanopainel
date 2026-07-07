@@ -41,6 +41,8 @@ import {
   importSuppliers,
   updateProfile,
 } from "@/features/settings/settings.functions";
+import { getCardFeePercent, setCardFeePercent } from "@/features/settings/settings.functions";
+import { CreditCard } from "lucide-react";
 import { MfaCard } from "@/features/settings/MfaCard";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +65,7 @@ function SettingsPage() {
           <TabsTrigger value="security"><ShieldCheck className="mr-1 h-4 w-4" /> Segurança</TabsTrigger>
           <TabsTrigger value="theme"><Palette className="mr-1 h-4 w-4" /> Tema</TabsTrigger>
           <TabsTrigger value="preferences"><Bell className="mr-1 h-4 w-4" /> Preferências</TabsTrigger>
+          <TabsTrigger value="financial"><CreditCard className="mr-1 h-4 w-4" /> Financeiro</TabsTrigger>
           <TabsTrigger value="backup"><Download className="mr-1 h-4 w-4" /> Backup</TabsTrigger>
           <TabsTrigger value="import"><Upload className="mr-1 h-4 w-4" /> Importação</TabsTrigger>
         </TabsList>
@@ -71,6 +74,7 @@ function SettingsPage() {
         <TabsContent value="security"><SecuritySection /></TabsContent>
         <TabsContent value="theme"><ThemeSection /></TabsContent>
         <TabsContent value="preferences"><PreferencesSection /></TabsContent>
+        <TabsContent value="financial"><FinancialSection /></TabsContent>
         <TabsContent value="backup"><BackupSection /></TabsContent>
         <TabsContent value="import"><ImportSection /></TabsContent>
       </Tabs>
@@ -80,7 +84,7 @@ function SettingsPage() {
 
 /* ------------------ PERFIL ------------------ */
 const profileSchema = z.object({
-  full_name: z.string().trim().min(1, "Nome obrigatório").max(120),
+  full_name: z.string().trim().max(120).optional().transform((v) => v ?? ""),
   avatar_url: z.string().trim().max(500).default(""),
 });
 type ProfileInput = z.input<typeof profileSchema>;
@@ -148,7 +152,7 @@ function ProfileSection() {
                 )}
               </div>
               <div>
-                <Label>URL do avatar (opcional)</Label>
+                <Label>URL do avatar</Label>
                 <Input placeholder="https://…" {...form.register("avatar_url")} />
               </div>
               <div className="md:col-span-2 flex justify-end">
@@ -582,4 +586,67 @@ function parseCsv(text: string): Record<string, string>[] {
       headers.forEach((h, i) => { o[h] = (r[i] ?? "").trim(); });
       return o;
     });
+}
+
+/* ------------------ FINANCEIRO ------------------ */
+function FinancialSection() {
+  const getFn = useServerFn(getCardFeePercent);
+  const setFn = useServerFn(setCardFeePercent);
+  const qc = useQueryClient();
+  const [percent, setPercent] = useState<string>("");
+
+  const q = useQuery({ queryKey: ["settings", "card-fee"], queryFn: () => getFn() });
+
+  useEffect(() => {
+    if (q.data && percent === "") setPercent(String(q.data.percent));
+  }, [q.data, percent]);
+
+  const mut = useMutation({
+    mutationFn: (p: number) => setFn({ data: { percent: p } }),
+    onSuccess: () => {
+      toast.success("Taxa atualizada");
+      qc.invalidateQueries({ queryKey: ["settings", "card-fee"] });
+    },
+    onError: (e: unknown) =>
+      toast.error("Erro ao salvar", { description: e instanceof Error ? e.message : "" }),
+  });
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Configurações financeiras</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <div className="max-w-sm space-y-2">
+          <Label>Taxa % padrão do cartão de crédito</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value={percent}
+              onChange={(e) => setPercent(e.target.value)}
+              disabled={q.isLoading}
+              className="w-32"
+            />
+            <span className="text-sm text-muted-foreground">%</span>
+            <Button
+              onClick={() => {
+                const n = Number(percent);
+                if (!Number.isFinite(n) || n < 0 || n > 100)
+                  return toast.error("Informe um valor entre 0 e 100");
+                mut.mutate(n);
+              }}
+              disabled={mut.isPending || q.isLoading}
+            >
+              {mut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+              Salvar
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Aplicada automaticamente em novos pagamentos por cartão. Pode ser ajustada por pagamento individualmente.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }

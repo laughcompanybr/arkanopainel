@@ -1,6 +1,6 @@
 /**
  * Error reporting utility.
- * Developed by Laugh.
+ * Developed by Laugh Company
  *
  * Forwards uncaught errors to the runtime host bridge when available.
  */

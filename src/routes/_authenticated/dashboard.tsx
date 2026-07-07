@@ -152,6 +152,16 @@ function DashboardContent() {
         />
       </section>
 
+      {/* Financeiro consolidado */}
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <MiniKpi label="Comissão · mês" value={formatBRL(data.commissionMonth)} icon={CircleDollarSign} />
+        <MiniKpi label="Taxas cartão · mês" value={formatBRL(data.cardFeesMonth)} icon={ReceiptText} />
+        <MiniKpi label="Frete · mês" value={formatBRL(data.shippingMonth)} icon={Truck} />
+        <MiniKpi label="Recebido · mês" value={formatBRL(data.receivedMonth)} icon={ArrowUpRight} />
+        <MiniKpi label="Pendente · mês" value={formatBRL(data.pendingMonth)} icon={ArrowDownRight} />
+        <MiniKpi label="Relógios · mês" value={formatNumber(data.watchesSoldMonth)} icon={Package} />
+      </section>
+
       {/* Row 2: main chart + secondary KPIs */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-6">
         <RevenueChart data={data.monthly} className="lg:col-span-4" />
@@ -161,6 +171,19 @@ function DashboardContent() {
           <MiniKpi label="Ticket médio" value={formatBRL(data.avgTicket)} icon={Sparkles} />
           <MiniKpi label="Lucro médio" value={formatBRL(data.avgProfit)} icon={CircleDollarSign} />
         </div>
+      </section>
+
+      {/* Controle mensal: comparativo + top produtos */}
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <MonthlyComparison
+          revenueMonth={data.revenueMonth}
+          profitMonth={data.profitMonth}
+          revenuePrev={data.monthComparison.revenuePrev}
+          profitPrev={data.monthComparison.profitPrev}
+          revenueDelta={data.monthComparison.revenueDelta}
+          profitDelta={data.monthComparison.profitDelta}
+        />
+        <TopProducts items={data.topProducts} className="lg:col-span-2" />
       </section>
 
       {/* Row 3: orders chart + pipeline */}
@@ -176,6 +199,77 @@ function DashboardContent() {
     </div>
   );
 }
+
+function MonthlyComparison({
+  revenueMonth,
+  profitMonth,
+  revenuePrev,
+  profitPrev,
+  revenueDelta,
+  profitDelta,
+}: {
+  revenueMonth: number;
+  profitMonth: number;
+  revenuePrev: number;
+  profitPrev: number;
+  revenueDelta: number;
+  profitDelta: number;
+}) {
+  const Row = ({ label, current, prev, delta }: { label: string; current: number; prev: number; delta: number }) => (
+    <li className="rounded-xl border border-border/60 bg-secondary/20 p-3">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className={cn("text-xs font-medium", delta >= 0 ? "text-[color:var(--color-success)]" : "text-destructive")}>
+          {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(1)}%
+        </span>
+      </div>
+      <div className="mt-1 flex items-baseline justify-between">
+        <span className="font-display text-lg">{formatBRL(current)}</span>
+        <span className="text-xs text-muted-foreground">Ant.: {formatBRL(prev)}</span>
+      </div>
+    </li>
+  );
+  return (
+    <div className="bento-tile p-5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Comparação mensal</p>
+      <h3 className="font-display text-lg">Mês atual vs anterior</h3>
+      <ul className="mt-4 space-y-2.5">
+        <Row label="Receita" current={revenueMonth} prev={revenuePrev} delta={revenueDelta} />
+        <Row label="Lucro" current={profitMonth} prev={profitPrev} delta={profitDelta} />
+      </ul>
+    </div>
+  );
+}
+
+function TopProducts({ items, className }: { items: DashboardStats["topProducts"]; className?: string }) {
+  return (
+    <div className={cn("bento-tile p-5", className)}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Ranking</p>
+      <h3 className="font-display text-lg">Produtos mais vendidos · mês</h3>
+      {items.length === 0 ? (
+        <EmptyState
+          icon={Package}
+          title="Sem vendas no mês"
+          description="Os relógios mais vendidos aparecerão aqui."
+        />
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {items.map((p, i) => (
+            <li key={p.label} className="flex items-center gap-3 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2 text-sm">
+              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-background/60 font-mono text-xs">
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{p.label}</span>
+              <span className="text-xs text-muted-foreground">{p.quantity} un</span>
+              <span className="font-display text-sm">{formatBRL(p.revenue)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 
 /* ------------ KPI TILES ------------ */
 

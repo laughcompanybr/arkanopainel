@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.tg_order_event() FROM PUBLIC, anon, authenticated;

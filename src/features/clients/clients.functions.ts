@@ -15,9 +15,11 @@ export const listClients = createServerFn({ method: "POST" })
 
     let q = supabase
       .from("clients")
-      .select("id, name, cpf, phone, whatsapp, instagram, city, state, notes, created_at, updated_at, deleted_at", {
-        count: "exact",
-      });
+      .select(
+        "id, name, cpf, phone, whatsapp, instagram, zip, street, number, complement, district, reference, city, state, notes, created_at, updated_at, deleted_at",
+        { count: "exact" },
+      );
+
 
     if (!data.includeDeleted) q = q.is("deleted_at", null);
     if (data.search) {
@@ -56,23 +58,39 @@ export const getClient = createServerFn({ method: "POST" })
         .limit(50),
       supabase
         .from("orders")
-        .select("id, order_number, status, sale_price, created_at")
+        .select("id, order_number, status, brand, model, photo_path, sale_price, quantity, created_at")
         .eq("client_id", data.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(50),
+
     ]);
 
     if (clientRes.error) throw clientRes.error;
     if (!clientRes.data) throw new Error("Cliente não encontrado");
 
+    const orders = ordersRes.data ?? [];
+    const orderPhotos: Record<string, string> = {};
+    await Promise.all(
+      orders
+        .filter((o) => o.photo_path)
+        .map(async (o) => {
+          const { data: signed } = await supabase.storage
+            .from("order-files")
+            .createSignedUrl(o.photo_path as string, 60 * 60);
+          if (signed?.signedUrl) orderPhotos[o.id] = signed.signedUrl;
+        }),
+    );
+
     return {
       client: clientRes.data,
       attachments: attachmentsRes.data ?? [],
       history: historyRes.data ?? [],
-      orders: ordersRes.data ?? [],
+      orders,
+      orderPhotos,
     };
   });
+
 
 export const createClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

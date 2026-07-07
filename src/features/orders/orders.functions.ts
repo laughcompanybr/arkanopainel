@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { orderSchema, orderFilterSchema, paymentSchema, ORDER_STATUS } from "./schemas";
+import { orderSchema, orderFilterSchema, paymentSchema, mixedPaymentsSchema, ORDER_STATUS } from "./schemas";
 
 const idInput = z.object({ id: z.string().uuid() });
 
@@ -16,9 +16,11 @@ export const listOrders = createServerFn({ method: "POST" })
     let q = supabase
       .from("orders")
       .select(
-        "id, order_number, status, brand, model, reference, sale_price, cost_price, amount_received, profit, purchase_date, expected_delivery, tracking_code, notes, payment_method, created_at, updated_at, deleted_at, client_id, supplier_id, clients(id,name,whatsapp), suppliers(id,name)",
+        "id, order_number, status, brand, model, reference, photo_path, quantity, sale_price, cost_price, commission, card_fee, shipping, other_costs, amount_received, profit, purchase_date, expected_delivery, tracking_code, notes, payment_method, created_at, updated_at, deleted_at, client_id, supplier_id, employee_id, clients(id,name,whatsapp), suppliers(id,name), employees(id,full_name)",
         { count: "exact" },
       );
+
+
 
     if (!data.includeDeleted) q = q.is("deleted_at", null);
     if (data.status) q = q.eq("status", data.status);
@@ -53,12 +55,13 @@ export const getOrder = createServerFn({ method: "POST" })
     const [orderRes, paymentsRes, eventsRes, attachmentsRes] = await Promise.all([
       supabase
         .from("orders")
-        .select("*, clients(id,name,whatsapp,phone,instagram), suppliers(id,name,company,whatsapp)")
+        .select("*, clients(id,name,whatsapp,phone,instagram), suppliers(id,name,company,whatsapp), employees(id,full_name,role)")
         .eq("id", data.id)
         .maybeSingle(),
+
       supabase
         .from("payments")
-        .select("id, direction, amount, method, paid_at, notes, created_at")
+        .select("id, direction, amount, method, installments, card_fee, card_fee_percent, paid_at, notes, created_at")
         .eq("order_id", data.id)
         .order("paid_at", { ascending: false }),
       supabase
@@ -79,19 +82,43 @@ export const getOrder = createServerFn({ method: "POST" })
     const payments = paymentsRes.data ?? [];
     const totalIn = payments.filter((p) => p.direction === "in").reduce((a, b) => a + Number(b.amount), 0);
     const totalOut = payments.filter((p) => p.direction === "out").reduce((a, b) => a + Number(b.amount), 0);
+    const o = orderRes.data as Record<string, unknown>;
+    const qty = Number(o.quantity ?? 1);
+    const totalSale = Number(o.sale_price ?? 0) * qty;
+    const totalCost = Number(o.cost_price ?? 0) * qty;
+    const grossProfit = totalSale - totalCost;
+    const netProfit =
+      grossProfit -
+      Number(o.commission ?? 0) -
+      Number(o.card_fee ?? 0) -
+      Number(o.shipping ?? 0) -
+      Number(o.other_costs ?? 0);
+    let photoUrl: string | null = null;
+    if (o.photo_path) {
+      const { data: signed } = await supabase.storage
+        .from("order-files")
+        .createSignedUrl(o.photo_path as string, 60 * 60);
+      photoUrl = signed?.signedUrl ?? null;
+    }
 
     return {
       order: orderRes.data,
       payments,
       events: eventsRes.data ?? [],
       attachments: attachmentsRes.data ?? [],
+      photoUrl,
       totals: {
         totalIn,
         totalOut,
-        balance: Number(orderRes.data.sale_price ?? 0) - totalIn,
-        profit: Number(orderRes.data.profit ?? 0),
+        totalSale,
+        totalCost,
+        grossProfit,
+        netProfit,
+        balance: totalSale - totalIn,
+        profit: Number(o.profit ?? grossProfit),
       },
     };
+
   });
 
 export const createOrder = createServerFn({ method: "POST" })
@@ -209,6 +236,70 @@ export const deletePayment = createServerFn({ method: "POST" })
       await context.supabase.from("orders").update({ amount_received: total }).eq("id", row.order_id);
     }
     return { ok: true };
+  });
+
+// ---------------- mixed payments ----------------
+export const addMixedPayments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v) => mixedPaymentsSchema.parse(v))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    const sum = data.entries.reduce((a, b) => a + Number(b.amount), 0);
+    if (data.expected_total > 0 && Math.abs(sum - data.expected_total) > 0.01) {
+      throw new Error(
+        `A soma dos pagamentos (R$ ${sum.toFixed(2)}) não confere com o total esperado (R$ ${data.expected_total.toFixed(2)}).`,
+      );
+    }
+
+    const rows = data.entries.map((e) => ({
+      order_id: data.order_id,
+      direction: e.direction,
+      amount: e.amount,
+      method: e.method ?? null,
+      installments: e.installments,
+      card_fee: e.card_fee,
+      card_fee_percent: e.card_fee_percent,
+      paid_at: e.paid_at,
+      notes: e.notes ?? null,
+      created_by: userId,
+    }));
+
+    const { data: inserted, error } = await supabase
+      .from("payments")
+      .insert(rows as never)
+      .select("id, direction, amount, method, card_fee, card_fee_percent");
+    if (error) throw error;
+
+    // Recompute amount_received
+    const hasIn = (inserted ?? []).some((p) => p.direction === "in");
+    if (hasIn) {
+      const { data: sums } = await supabase
+        .from("payments")
+        .select("amount")
+        .eq("order_id", data.order_id)
+        .eq("direction", "in");
+      const total = (sums ?? []).reduce((a, b) => a + Number(b.amount), 0);
+      await supabase.from("orders").update({ amount_received: total }).eq("id", data.order_id);
+    }
+
+    const summary = (inserted ?? [])
+      .map((p) => `${p.method ?? "—"}: R$ ${Number(p.amount).toFixed(2)}${p.card_fee_percent ? ` (taxa ${p.card_fee_percent}% = R$ ${Number(p.card_fee ?? 0).toFixed(2)})` : ""}`)
+      .join(" · ");
+
+    await supabase.from("order_events").insert({
+      order_id: data.order_id,
+      type: "payment",
+      message: `Pagamento misto registrado (${inserted?.length ?? 0} entradas): ${summary}`,
+      meta: {
+        entries: inserted,
+        sum,
+        expected_total: data.expected_total,
+      },
+      actor: userId,
+    });
+
+    return { ok: true, count: inserted?.length ?? 0, sum };
   });
 
 // ---------------- attachments ----------------

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Post-build branding guard — scans compiled output (dist/, .output/) for
- * any forbidden authorship strings. Developed by Laugh.
+ * any forbidden authorship strings. Developed by Laugh Company
  *
  * Runs after `vite build`. Fails the build (exit 1) if any match is found
  * in JS/CSS/HTML/JSON assets. Package-name residues from external tooling

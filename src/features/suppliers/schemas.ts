@@ -5,22 +5,21 @@ const optionalTrim = (max = 200) =>
     .string()
     .trim()
     .max(max)
-    .optional()
+    .nullish()
     .transform((v) => (v && v.length ? v : null))
     .nullable();
 
 const optionalPhone = z
   .string()
-  .optional()
+  .nullish()
   .transform((v) => (v ? v.replace(/\D/g, "") : ""))
   .refine((v) => v === "" || (v.length >= 10 && v.length <= 13), { message: "Telefone inválido" })
   .transform((v) => (v === "" ? null : v));
 
 const optionalEmail = z
   .string()
-  .trim()
-  .optional()
-  .transform((v) => v ?? "")
+  .nullish()
+  .transform((v) => (v ?? "").trim())
   .refine((v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), { message: "E-mail inválido" })
   .transform((v) => (v === "" ? null : v));
 
@@ -32,25 +31,24 @@ export const supplierSchema = z.object({
   whatsapp: optionalPhone,
   instagram: z
     .string()
-    .trim()
-    .max(60)
-    .optional()
-    .transform((v) => (v ? v.replace(/^@/, "") : ""))
+    .nullish()
+    .transform((v) => (v ? v.trim().replace(/^@/, "") : ""))
     .transform((v) => (v === "" ? null : v)),
   avg_delivery_days: z
     .union([z.string(), z.number()])
-    .optional()
+    .nullish()
     .transform((v) => {
       if (v === undefined || v === "" || v === null) return null;
       const n = typeof v === "number" ? v : parseInt(v, 10);
       return Number.isFinite(n) ? n : null;
     })
     .refine((v) => v === null || (v >= 0 && v <= 365), { message: "Entre 0 e 365 dias" }),
+
   notes: z
     .string()
     .trim()
     .max(2000)
-    .optional()
+    .nullish()
     .transform((v) => (v && v.length ? v : null))
     .nullable(),
 });

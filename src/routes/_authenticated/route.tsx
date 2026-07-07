@@ -41,6 +41,7 @@ function AuthPending() {
   );
 }
 
+
 function LayoutComponent() {
   return (
     <AppShell>

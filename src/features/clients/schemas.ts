@@ -4,7 +4,7 @@ const optionalTrim = z
   .string()
   .trim()
   .max(200)
-  .optional()
+  .nullish()
   .transform((v) => (v && v.length ? v : null))
   .nullable();
 
@@ -12,20 +12,25 @@ const optionalTrim = z
 const cpfRegex = /^\d{11}$/;
 const optionalCpf = z
   .string()
-  .optional()
+  .nullish()
   .transform((v) => (v ? v.replace(/\D/g, "") : ""))
   .refine((v) => v === "" || cpfRegex.test(v), { message: "CPF deve ter 11 dígitos" })
   .transform((v) => (v === "" ? null : v));
 
 const optionalPhone = z
   .string()
-  .optional()
+  .nullish()
   .transform((v) => (v ? v.replace(/\D/g, "") : ""))
   .refine((v) => v === "" || (v.length >= 10 && v.length <= 13), { message: "Telefone inválido" })
   .transform((v) => (v === "" ? null : v));
 
 export const clientSchema = z.object({
-  name: z.string().trim().min(2, "Nome muito curto").max(120),
+  name: z
+    .string()
+    .trim()
+    .max(120)
+    .nullish()
+    .transform((v) => (v && v.length ? v : "Sem nome")),
   cpf: optionalCpf,
   phone: optionalPhone,
   whatsapp: optionalPhone,
@@ -33,25 +38,37 @@ export const clientSchema = z.object({
     .string()
     .trim()
     .max(60)
-    .optional()
+    .nullish()
     .transform((v) => (v ? v.replace(/^@/, "") : ""))
     .transform((v) => (v === "" ? null : v)),
+  zip: z
+    .string()
+    .nullish()
+    .transform((v) => (v ? v.replace(/\D/g, "") : ""))
+    .refine((v) => v === "" || v.length === 8, { message: "CEP deve ter 8 dígitos" })
+    .transform((v) => (v === "" ? null : v)),
+  street: optionalTrim,
+  number: optionalTrim,
+  complement: optionalTrim,
+  district: optionalTrim,
+  reference: optionalTrim,
   city: optionalTrim,
   state: z
     .string()
     .trim()
     .max(2)
-    .optional()
+    .nullish()
     .transform((v) => (v ? v.toUpperCase() : ""))
     .transform((v) => (v === "" ? null : v)),
   notes: z
     .string()
     .trim()
     .max(2000)
-    .optional()
+    .nullish()
     .transform((v) => (v && v.length ? v : null))
     .nullable(),
 });
+
 
 export type ClientInput = z.input<typeof clientSchema>;
 export type ClientPayload = z.output<typeof clientSchema>;

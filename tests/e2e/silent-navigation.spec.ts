@@ -43,10 +43,10 @@ test.describe("Authenticated navigation is silent", () => {
       await page.goto(route);
       await page.waitForLoadState("domcontentloaded");
       await checkForBanner(`after nav ${route}`);
-      // Verify the AppShell footer with "Developed by Laugh" is still visible
+      // Verify the AppShell footer with "Developed by Laugh Company" is still visible
       // — proves we're inside the shell, not on the pending screen.
       await expect(
-        page.locator("footer").filter({ hasText: /Developed by Laugh/i }),
+        page.locator("footer").filter({ hasText: /Developed by Laugh Company/i }),
       ).toBeVisible();
     }
 

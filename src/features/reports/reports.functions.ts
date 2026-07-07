@@ -48,8 +48,17 @@ export const getReports = createServerFn({ method: "POST" })
     const netProfit = grossProfit - totalExpenses;
     const ticket = activeOrders.length ? revenue / activeOrders.length : 0;
 
-    // Monthly evolution (revenue + profit)
+    // Monthly evolution (revenue + profit) — fill every month in the range
     const monthMap = new Map<string, { key: string; revenue: number; profit: number; orders: number }>();
+    const fromDate = new Date(data.from + "T00:00:00Z");
+    const toDate = new Date(data.to + "T00:00:00Z");
+    const cursor = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), 1));
+    while (cursor <= end) {
+      const k = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`;
+      monthMap.set(k, { key: k, revenue: 0, profit: 0, orders: 0 });
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
     for (const o of activeOrders) {
       const d = new Date(o.created_at);
       const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
