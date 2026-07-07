@@ -115,17 +115,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
-  // The `dark` class is a sensible SSR default; ThemeProvider re-syncs on mount
-  // from localStorage / prefers-color-scheme without a flash for dark users.
+  // Server always renders the `dark` shell. ThemeProvider re-applies the real
+  // theme (light/dark) inside a useEffect on the client after hydration, so
+  // no attribute divergence exists at hydration time (React #418) and no
+  // suppressHydrationWarning is needed. Users on the `light` theme see a
+  // brief dark flash on first paint; dark users see nothing.
   return (
     <html lang="pt-BR" className="dark" style={{ colorScheme: "dark" }}>
       <head>
         <HeadContent />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('arkano-theme');if(!t){t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}var r=document.documentElement;r.classList.remove('light','dark');r.classList.add(t);r.style.colorScheme=t;}catch(e){}})();`,
-          }}
-        />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
         {children}
@@ -134,6 +132,7 @@ function RootShell({ children }: { children: ReactNode }) {
     </html>
   );
 }
+
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();

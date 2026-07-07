@@ -1,9 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { computeMonthlyBreakdown, clampTaxPercentWithInfo } from "@/lib/dashboard-calc";
+
 
 export interface DashboardStats {
   revenueMonth: number;
   profitMonth: number;
+  profitGrossMonth: number;
+  taxAmountMonth: number;
+  taxRate: number;
+  /** True when the stored tax_percent was outside 0..100 and had to be clamped. */
+  taxRateClamped: boolean;
+  /** Original stored value before clamping, when available. */
+  taxRateRaw: number | null;
+
+  expensesMonth: number;
   receivable: number;
   payable: number;
   ordersMonth: number;
@@ -40,6 +51,7 @@ export interface DashboardStats {
 }
 
 
+
 const PIPELINE_AWAITING = new Set([
   "new",
   "awaiting_deposit",
@@ -58,7 +70,7 @@ export const getDashboardStats = createServerFn({ method: "GET" })
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
     // All non-deleted orders (bounded by soft-delete filter; small tables here)
-    const [ordersRes, clientsRes, paymentsRes, expensesRes, eventsRes] = await Promise.all([
+    const [ordersRes, clientsRes, paymentsRes, expensesRes, eventsRes, taxRes] = await Promise.all([
       supabase
         .from("orders")
         .select(
@@ -73,7 +85,9 @@ export const getDashboardStats = createServerFn({ method: "GET" })
         .select("id, type, message, order_id, created_at, orders!inner(order_number)")
         .order("created_at", { ascending: false })
         .limit(12),
+      supabase.from("app_settings").select("value").eq("key", "tax_percent").maybeSingle(),
     ]);
+
 
     if (ordersRes.error) throw ordersRes.error;
     if (paymentsRes.error) throw paymentsRes.error;
@@ -177,6 +191,38 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       }
     }
 
+    // Separate expenses for the current month (payables = expenses subtracted from profit)
+    let expensesMonth = 0;
+    for (const p of payments) {
+      if (p.direction === "out" && p.paid_at && p.paid_at >= monthStart) {
+        expensesMonth += Number(p.amount ?? 0);
+      }
+    }
+    for (const e of expenses) {
+      if (e.incurred_at && e.incurred_at >= monthStart) {
+        expensesMonth += Number(e.amount ?? 0);
+      }
+    }
+
+    // Tax: configurable % applied on top of gross profit. Clamp the persisted
+    // value defensively so a bad app_settings row cannot break the dashboard;
+    // report the clamp so the UI can show a warning.
+    const taxRow = (taxRes?.data ?? null) as { value?: { percent?: number } } | null;
+    const taxInfo = clampTaxPercentWithInfo(taxRow?.value?.percent, 6);
+    const breakdown = computeMonthlyBreakdown({
+      grossProfit: profitMonth,
+      expenses: expensesMonth,
+      taxPercent: taxInfo.percent,
+    });
+    const taxRate = breakdown.taxRate;
+    const taxRateClamped = taxInfo.clamped;
+    const taxRateRaw = taxInfo.rawPercent;
+    const profitGrossMonth = breakdown.grossProfit;
+    const taxAmountMonth = breakdown.taxAmount;
+    const profitNetMonth = breakdown.netProfit;
+
+
+
     const nonCancelled = orders.filter((o) => String(o.status) !== "cancelled");
     const totalRevenue = nonCancelled.reduce((s, o) => s + Number(o.sale_price ?? 0) * Number((o as { quantity?: number }).quantity ?? 1), 0);
     const totalProfit = nonCancelled.reduce(
@@ -194,8 +240,9 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       revenuePrev: prevBucket?.revenue ?? 0,
       profitPrev: prevBucket?.profit ?? 0,
       revenueDelta: (prevBucket?.revenue ?? 0) > 0 ? ((revenueMonth - (prevBucket?.revenue ?? 0)) / (prevBucket?.revenue ?? 1)) * 100 : 0,
-      profitDelta: (prevBucket?.profit ?? 0) !== 0 ? ((profitMonth - (prevBucket?.profit ?? 0)) / Math.abs(prevBucket?.profit ?? 1)) * 100 : 0,
+      profitDelta: (prevBucket?.profit ?? 0) !== 0 ? ((profitNetMonth - (prevBucket?.profit ?? 0)) / Math.abs(prevBucket?.profit ?? 1)) * 100 : 0,
     };
+
 
     const topProducts = Array.from(productTally.entries())
       .map(([label, v]) => ({ label, quantity: v.quantity, revenue: v.revenue }))
@@ -223,7 +270,14 @@ export const getDashboardStats = createServerFn({ method: "GET" })
 
     return {
       revenueMonth,
-      profitMonth,
+      profitMonth: profitNetMonth,
+      profitGrossMonth,
+      taxAmountMonth,
+      taxRate,
+      taxRateClamped,
+      taxRateRaw,
+
+      expensesMonth,
       receivable,
       payable,
       ordersMonth,
@@ -248,4 +302,5 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       activity,
     };
   });
+
 

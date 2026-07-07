@@ -26,8 +26,9 @@ interface Preview {
 }
 
 /**
- * Upload with progress + cancel support. Returns an object with `abort()` and
- * a promise. Uses Supabase's signed upload URL + XHR for progress.
+ * Upload with progress + cancel via a raw XHR against the Supabase Storage
+ * object endpoint. Simpler and more reliable than the signed-upload-URL flow
+ * (which does not accept custom headers like `x-upsert`).
  */
 function uploadWithProgress(
   path: string,
@@ -37,23 +38,27 @@ function uploadWithProgress(
   let xhr: XMLHttpRequest | null = null;
 
   const promise = (async () => {
-    const { data: signed, error: signErr } = await supabase.storage
-      .from("finance-receipts")
-      .createSignedUploadUrl(path);
-    if (signErr || !signed) {
-      const { error } = await supabase.storage
-        .from("finance-receipts")
-        .upload(path, file, { contentType: file.type });
-      if (error) throw error;
-      onProgress(100);
-      return;
-    }
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) throw new Error("Sessão expirada. Faça login novamente.");
+
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/finance-receipts/${path
+      .split("/")
+      .map((s) => encodeURIComponent(s))
+      .join("/")}`;
 
     await new Promise<void>((resolve, reject) => {
       const req = new XMLHttpRequest();
       xhr = req;
-      req.open("PUT", signed.signedUrl, true);
+      req.open("POST", url, true);
+      req.setRequestHeader("Authorization", `Bearer ${token}`);
+      req.setRequestHeader(
+        "apikey",
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+      );
       if (file.type) req.setRequestHeader("Content-Type", file.type);
+      req.setRequestHeader("x-upsert", "true");
+      req.setRequestHeader("cache-control", "3600");
       req.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
       };
@@ -64,7 +69,14 @@ function uploadWithProgress(
           onProgress(100);
           resolve();
         } else {
-          reject(new Error(`Falha ao enviar (${req.status})`));
+          let msg = `Falha ao enviar (${req.status})`;
+          try {
+            const body = JSON.parse(req.responseText);
+            if (body?.message) msg = body.message;
+          } catch {
+            /* ignore */
+          }
+          reject(new Error(msg));
         }
       };
       req.send(file);
@@ -78,6 +90,7 @@ function uploadWithProgress(
     },
   };
 }
+
 
 
 function formatError(file: File): string | null {
@@ -146,7 +159,11 @@ export function ReceiptField({ value, onChange, label = "Comprovante" }: Props) 
     setUploading(true);
     try {
       const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `receipts/${Date.now()}-${safe}`;
+      const uid =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID().slice(0, 8)
+          : Math.random().toString(36).slice(2, 10);
+      const path = `receipts/${Date.now()}-${uid}-${safe}`;
       const { promise, abort } = uploadWithProgress(path, file, setProgress);
       abortRef.current = abort;
       await promise;

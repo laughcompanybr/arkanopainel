@@ -1,8 +1,24 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { clampTaxPercent, clampTaxPercentWithInfo } from "@/lib/dashboard-calc";
 
 const CARD_FEE_KEY = "card_fee_percent";
+const TAX_KEY = "tax_percent";
+
+/**
+ * Zod schema for a percent-in-app_settings input. Ensures the incoming value
+ * is a finite number between 0 and 100 before it can be persisted.
+ */
+const percentSchema = z.object({
+  percent: z
+    .number({ invalid_type_error: "Percentual inválido" })
+    .min(0, { message: "Percentual não pode ser negativo" })
+    .max(100, { message: "Percentual não pode exceder 100%" })
+    .refine((n) => Number.isFinite(n), { message: "Percentual inválido" }),
+});
+
+
 
 export const getCardFeePercent = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -19,22 +35,65 @@ export const getCardFeePercent = createServerFn({ method: "GET" })
 
 export const setCardFeePercent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((v) => z.object({ percent: z.number().min(0).max(100) }).parse(v))
+  .inputValidator((v) => percentSchema.parse(v))
   .handler(async ({ data, context }) => {
+    const percent = clampTaxPercent(data.percent);
     const { error } = await context.supabase
       .from("app_settings")
       .upsert(
         {
           key: CARD_FEE_KEY,
-          value: { percent: data.percent },
+          value: { percent },
           description: "Taxa % padrão do cartão de crédito",
           updated_by: context.userId,
+          updated_at: new Date().toISOString(),
         } as never,
         { onConflict: "key" },
       );
-    if (error) throw error;
-    return { ok: true, percent: data.percent };
+    if (error) throw new Error(error.message);
+    return { ok: true, percent };
   });
+
+export const getTaxPercent = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", TAX_KEY)
+      .maybeSingle();
+    if (error) throw error;
+    const value = (data?.value ?? {}) as { percent?: number };
+    // Clamp on read: if a bad value slipped in (legacy row / manual edit /
+    // out-of-range) we still return a safe 0..100 number and flag it so the
+    // UI can surface an "we corrected this automatically" notice.
+    const info = clampTaxPercentWithInfo(value.percent, 6);
+    return { percent: info.percent, clamped: info.clamped, rawPercent: info.rawPercent };
+  });
+
+
+export const setTaxPercent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v) => percentSchema.parse(v))
+  .handler(async ({ data, context }) => {
+    const percent = clampTaxPercent(data.percent);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert(
+        {
+          key: TAX_KEY,
+          value: { percent },
+          description: "Alíquota % de imposto aplicada sobre o lucro",
+          updated_by: context.userId,
+          updated_at: new Date().toISOString(),
+        } as never,
+        { onConflict: "key" },
+      );
+    if (error) throw new Error(error.message);
+    return { ok: true, percent };
+  });
+
+
 
 export const getProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

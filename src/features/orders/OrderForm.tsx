@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { orderSchema, ORDER_STATUS, STATUS_LABEL, PAYMENT_METHODS, type OrderInput, type OrderPayload } from "./schemas";
 import { listClientOptions, listSupplierOptions } from "./orders.functions";
 import { listEmployeeOptions } from "@/features/employees/employees.functions";
+import { getCardFeePercent } from "@/features/settings/settings.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
@@ -37,9 +38,12 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
   const clientsFn = useServerFn(listClientOptions);
   const suppliersFn = useServerFn(listSupplierOptions);
   const employeesFn = useServerFn(listEmployeeOptions);
+  const cardFeeFn = useServerFn(getCardFeePercent);
   const clientsQ = useQuery({ queryKey: ["client-options"], queryFn: () => clientsFn(), staleTime: 60_000 });
   const suppliersQ = useQuery({ queryKey: ["supplier-options"], queryFn: () => suppliersFn(), staleTime: 60_000 });
   const employeesQ = useQuery({ queryKey: ["employee-options"], queryFn: () => employeesFn(), staleTime: 60_000 });
+  const cardFeeQ = useQuery({ queryKey: ["settings", "card-fee"], queryFn: () => cardFeeFn(), staleTime: 60_000 });
+
 
 
   const form = useForm<OrderInput, unknown, OrderPayload>({
@@ -97,6 +101,8 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
   const otherCosts = Number(useWatch({ control, name: "other_costs" }) ?? 0);
   const received = Number(useWatch({ control, name: "amount_received" }) ?? 0);
   const photoPath = String(useWatch({ control, name: "photo_path" }) ?? "");
+  const paymentMethod = String(useWatch({ control, name: "payment_method" }) ?? "");
+  const isCardPayment = /cart[aã]o/i.test(paymentMethod);
 
   const totalSale = sale * qty;
   const totalCost = cost * qty;
@@ -107,7 +113,36 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
 
   const [cepLoading, setCepLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Card fee is entered as a % of the sale total; card_fee (BRL) is derived.
+  const initialFeePct =
+    totalSale > 0 && Number(defaultValues?.card_fee ?? 0) > 0
+      ? (Number(defaultValues?.card_fee) / totalSale) * 100
+      : null;
+  const [cardFeePct, setCardFeePct] = useState<string>(
+    initialFeePct !== null ? initialFeePct.toFixed(2) : "",
+  );
+  // When settings load and user hasn't typed a percent yet, prefill from default.
+  useEffect(() => {
+    if (cardFeePct === "" && cardFeeQ.data?.percent != null) {
+      setCardFeePct(String(cardFeeQ.data.percent));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardFeeQ.data?.percent]);
+  // Recompute BRL card_fee whenever percent, sale total or payment method changes.
+  // If the payment method is not a card, zero it out so it doesn't affect the profit.
+  useEffect(() => {
+    if (!isCardPayment) {
+      setValue("card_fee", 0 as never, { shouldDirty: true });
+      return;
+    }
+    const pct = Number(String(cardFeePct).replace(",", "."));
+    if (!Number.isFinite(pct) || pct < 0) return;
+    const fee = Math.max(0, (totalSale * pct) / 100);
+    setValue("card_fee", Number(fee.toFixed(2)) as never, { shouldDirty: true });
+  }, [cardFeePct, totalSale, isCardPayment, setValue]);
+
   const fileRef = useRef<HTMLInputElement>(null);
+
 
   async function lookupShipCep() {
     const raw = String(getValues("ship_zip") ?? "").replace(/\D/g, "");
@@ -270,10 +305,35 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
             </div>
           ) : null}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="card_fee">Taxa do cartão</Label>
-            <Input id="card_fee" type="number" step="0.01" min="0" {...register("card_fee")} />
-          </div>
+          {isCardPayment ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="card_fee_percent">Taxa do cartão (%)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="card_fee_percent"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={cardFeePct}
+                  onChange={(e) => setCardFeePct(e.target.value)}
+                  className="w-32"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+                <span className="text-xs text-muted-foreground">
+                  = {formatBRL(cardFee)}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Percentual aplicado sobre o total da venda. Padrão vem das Configurações.
+              </p>
+              <input type="hidden" {...register("card_fee")} />
+            </div>
+          ) : (
+            <input type="hidden" {...register("card_fee")} />
+          )}
+
+
           <div className="space-y-1.5">
             <Label htmlFor="shipping">Frete</Label>
             <Input id="shipping" type="number" step="0.01" min="0" {...register("shipping")} />

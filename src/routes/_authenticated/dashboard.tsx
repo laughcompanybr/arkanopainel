@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Clock,
+  Landmark,
   Package,
   ReceiptText,
   Truck,
@@ -30,6 +31,7 @@ import {
   Activity,
   Sparkles,
 } from "lucide-react";
+
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -44,6 +46,60 @@ const dashboardQueryOptions = (fn: () => Promise<DashboardStats>) =>
     queryFn: fn,
     staleTime: 30_000,
   });
+
+/**
+ * Open a print-optimized window with the monthly profit breakdown, then
+ * trigger the browser's print dialog so the user can save it as PDF.
+ * Uses only DOM APIs — no extra dependency required.
+ */
+function exportBreakdownPdf(data: DashboardStats) {
+  const fmt = (n: number) =>
+    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const now = new Date();
+  const monthLabel = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const taxLabel = data.taxRate.toFixed(2).replace(/\.?0+$/, "");
+  const clampedNote = data.taxRateClamped
+    ? `<p class="warn">Aviso: a alíquota configurada${
+        data.taxRateRaw !== null ? ` (${data.taxRateRaw}%)` : ""
+      } estava fora de 0%–100% e foi ajustada para ${taxLabel}%.</p>`
+    : "";
+  const html = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"/>
+<title>Detalhamento do lucro — ${monthLabel}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font: 14px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; color: #0f172a; margin: 32px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #64748b; margin: 0 0 24px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.total td { border-top: 2px solid #0f172a; border-bottom: none; font-weight: 700; }
+  .warn { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 8px 12px; border-radius: 6px; font-size: 12px; margin: 12px 0; }
+  .foot { margin-top: 24px; color: #64748b; font-size: 11px; }
+</style></head>
+<body>
+  <h1>Detalhamento do lucro — ${monthLabel}</h1>
+  <p class="sub">Gerado em ${now.toLocaleString("pt-BR")}</p>
+  ${clampedNote}
+  <table>
+    <tbody>
+      <tr><td>Lucro bruto</td><td class="n">${fmt(data.profitGrossMonth)}</td></tr>
+      <tr><td>− Despesas do mês</td><td class="n">−${fmt(data.expensesMonth)}</td></tr>
+      <tr><td>− Imposto (${taxLabel}% sobre o lucro bruto)</td><td class="n">−${fmt(data.taxAmountMonth)}</td></tr>
+      <tr class="total"><td>= Lucro líquido</td><td class="n">${fmt(data.profitMonth)}</td></tr>
+    </tbody>
+  </table>
+  <p class="foot">Fórmula: Lucro líquido = Lucro bruto − Despesas − max(Lucro bruto, 0) × alíquota.</p>
+  <script>window.addEventListener('load', () => setTimeout(() => window.print(), 200));</script>
+</body></html>`;
+  const w = window.open("", "_blank", "noopener,noreferrer,width=800,height=900");
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -132,35 +188,100 @@ function DashboardContent() {
         <KpiTile
           eyebrow="Lucro · mês"
           value={formatBRL(data.profitMonth)}
-          hint={`Margem ${margin.toFixed(1)}%`}
+          hint={`Margem ${margin.toFixed(1)}% · líquido após despesas e imposto`}
           icon={CircleDollarSign}
           accent="success"
           delay={0.04}
         />
         <KpiTile
-          eyebrow="A receber"
-          value={formatBRL(data.receivable)}
-          icon={Wallet}
+          eyebrow={`Imposto · ${data.taxRate.toFixed(2).replace(/\.?0+$/, "")}%`}
+          value={formatBRL(data.taxAmountMonth)}
+          hint="Calculado sobre o lucro bruto"
+          icon={Landmark}
           accent="warning"
           delay={0.08}
         />
         <KpiTile
-          eyebrow="A pagar · mês"
-          value={formatBRL(data.payable)}
+          eyebrow="Despesas · mês"
+          value={formatBRL(data.expensesMonth)}
+          hint="Abatido do lucro"
           icon={ReceiptText}
           delay={0.12}
         />
       </section>
 
+      {/* Detalhamento do mês — auditoria rápida do cálculo do lucro líquido */}
+      <section
+        data-testid="profit-breakdown"
+        className="rounded-xl border border-border bg-card/40 p-4"
+      >
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-medium">Detalhamento do lucro · mês</h2>
+          <div className="flex items-center gap-3">
+            <p className="text-[11px] text-muted-foreground">
+              Lucro bruto − Despesas − Imposto ({data.taxRate.toFixed(2).replace(/\.?0+$/, "")}%) = Lucro líquido
+            </p>
+            <button
+              type="button"
+              data-testid="export-breakdown-pdf"
+              onClick={() => exportBreakdownPdf(data)}
+              className="rounded-md border border-border bg-background px-2 py-1 text-[11px] font-medium hover:bg-accent"
+            >
+              Exportar PDF
+            </button>
+          </div>
+        </div>
+        {data.taxRateClamped ? (
+          <div
+            role="alert"
+            data-testid="tax-clamp-warning"
+            className="mb-3 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300"
+          >
+            A alíquota de imposto configurada
+            {data.taxRateRaw !== null ? ` (${data.taxRateRaw}%)` : ""}
+            {" "}estava fora do intervalo válido de 0% a 100% e foi ajustada automaticamente para {data.taxRate}%.
+            Atualize o valor em Configurações para evitar este aviso.
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+          <div className="rounded-md border border-border/70 bg-background/60 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Lucro bruto</p>
+            <p data-testid="pb-gross" className="mt-1 font-display text-lg">{formatBRL(data.profitGrossMonth)}</p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-background/60 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">− Despesas</p>
+            <p data-testid="pb-expenses" className="mt-1 font-display text-lg text-destructive">−{formatBRL(data.expensesMonth)}</p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-background/60 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              − Imposto ({data.taxRate.toFixed(2).replace(/\.?0+$/, "")}%)
+            </p>
+            <p data-testid="pb-tax" className="mt-1 font-display text-lg text-destructive">−{formatBRL(data.taxAmountMonth)}</p>
+          </div>
+          <div className="rounded-md border border-primary/60 bg-primary/5 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">= Lucro líquido</p>
+            <p
+              data-testid="pb-net"
+              className={`mt-1 font-display text-lg ${data.profitMonth >= 0 ? "text-emerald-500" : "text-destructive"}`}
+            >
+              {formatBRL(data.profitMonth)}
+            </p>
+          </div>
+        </div>
+      </section>
+
+
       {/* Financeiro consolidado */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <MiniKpi label="A receber" value={formatBRL(data.receivable)} icon={Wallet} />
         <MiniKpi label="Comissão · mês" value={formatBRL(data.commissionMonth)} icon={CircleDollarSign} />
         <MiniKpi label="Taxas cartão · mês" value={formatBRL(data.cardFeesMonth)} icon={ReceiptText} />
         <MiniKpi label="Frete · mês" value={formatBRL(data.shippingMonth)} icon={Truck} />
         <MiniKpi label="Recebido · mês" value={formatBRL(data.receivedMonth)} icon={ArrowUpRight} />
         <MiniKpi label="Pendente · mês" value={formatBRL(data.pendingMonth)} icon={ArrowDownRight} />
-        <MiniKpi label="Relógios · mês" value={formatNumber(data.watchesSoldMonth)} icon={Package} />
+
       </section>
+
 
       {/* Row 2: main chart + secondary KPIs */}
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-6">
@@ -168,9 +289,11 @@ function DashboardContent() {
         <div className="grid grid-cols-2 gap-3 lg:col-span-2 lg:grid-cols-1">
           <MiniKpi label="Clientes" value={formatNumber(data.clientsTotal)} icon={Users} />
           <MiniKpi label="Pedidos · mês" value={formatNumber(data.ordersMonth)} icon={Package} />
+          <MiniKpi label="Relógios · mês" value={formatNumber(data.watchesSoldMonth)} icon={Package} />
           <MiniKpi label="Ticket médio" value={formatBRL(data.avgTicket)} icon={Sparkles} />
           <MiniKpi label="Lucro médio" value={formatBRL(data.avgProfit)} icon={CircleDollarSign} />
         </div>
+
       </section>
 
       {/* Controle mensal: comparativo + top produtos */}
