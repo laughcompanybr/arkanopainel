@@ -4,11 +4,11 @@ export const EXPENSE_CATEGORIES = [
   "Operacional",
   "Marketing",
   "Logística",
-  "Impostos",
   "Salários",
   "Comissões",
   "Outros",
 ] as const;
+
 
 const money = z
   .union([z.string(), z.number()])

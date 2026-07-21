@@ -42,4 +42,3 @@ Variáveis de ambiente necessárias estão documentadas em
 ---
 
 © Laugh. Todos os direitos reservados.
-"# pulsonobre" 

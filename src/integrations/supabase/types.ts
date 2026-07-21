@@ -464,6 +464,60 @@ export type Database = {
           },
         ]
       }
+      order_items: {
+        Row: {
+          created_at: string
+          id: string
+          name_snapshot: string
+          order_id: string
+          product_id: string | null
+          quantity: number
+          sku_snapshot: string | null
+          unit_cost_price: number
+          unit_sale_price: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name_snapshot: string
+          order_id: string
+          product_id?: string | null
+          quantity?: number
+          sku_snapshot?: string | null
+          unit_cost_price?: number
+          unit_sale_price?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name_snapshot?: string
+          order_id?: string
+          product_id?: string | null
+          quantity?: number
+          sku_snapshot?: string | null
+          unit_cost_price?: number
+          unit_sale_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           amount_received: number
@@ -672,6 +726,114 @@ export type Database = {
           },
         ]
       }
+      product_movements: {
+        Row: {
+          actor: string | null
+          created_at: string
+          id: string
+          order_id: string | null
+          product_id: string
+          qty: number
+          qty_after: number
+          reason: string | null
+          type: string
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          product_id: string
+          qty: number
+          qty_after: number
+          reason?: string | null
+          type: string
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          product_id?: string
+          qty?: number
+          qty_after?: number
+          reason?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_movements_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          category: string | null
+          cost_price: number
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          min_stock: number
+          name: string
+          notes: string | null
+          sale_price: number
+          sku: string | null
+          status: string
+          stock_qty: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          cost_price?: number
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          min_stock?: number
+          name: string
+          notes?: string | null
+          sale_price?: number
+          sku?: string | null
+          status?: string
+          stock_qty?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          cost_price?: number
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          min_stock?: number
+          name?: string
+          notes?: string | null
+          sale_price?: number
+          sku?: string | null
+          status?: string
+          stock_qty?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -773,6 +935,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      adjust_product_stock: {
+        Args: {
+          _product_id: string
+          _qty: number
+          _reason: string
+          _type: string
+        }
+        Returns: number
+      }
+      apply_order_stock_out: { Args: { _order_id: string }; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -781,9 +953,20 @@ export type Database = {
         Returns: boolean
       }
       is_staff_or_admin: { Args: { _user_id: string }; Returns: boolean }
+      revert_order_stock: { Args: { _order_id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "staff"
+      business_type:
+        | "watch_store"
+        | "jewelry"
+        | "technical_assistance"
+        | "retail"
+        | "service"
+        | "office"
+        | "health"
+        | "restaurant"
+        | "other"
       fin_direction: "in" | "out"
       fin_tx_status: "pending" | "paid" | "overdue" | "cancelled"
       order_status:
@@ -928,6 +1111,17 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "staff"],
+      business_type: [
+        "watch_store",
+        "jewelry",
+        "technical_assistance",
+        "retail",
+        "service",
+        "office",
+        "health",
+        "restaurant",
+        "other",
+      ],
       fin_direction: ["in", "out"],
       fin_tx_status: ["pending", "paid", "overdue", "cancelled"],
       order_status: [
