@@ -1,19 +1,20 @@
-
--- Create enum if not exists (checked in case previous failed midway)
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'task_priority') THEN
-        CREATE TYPE task_priority AS ENUM ('low', 'medium', 'high', 'urgent');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'task_type') THEN
-        CREATE TYPE task_type AS ENUM ('call', 'meeting', 'return', 'follow_up', 'proposal', 'other');
-    END IF;
+-- Garantir que todas as permissões básicas estão aplicadas corretamente de forma idempotente
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOR t IN SELECT table_name 
+             FROM information_schema.tables 
+             WHERE table_schema = 'public' 
+             AND table_type = 'BASE TABLE'
+    LOOP
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO authenticated', t);
+        EXECUTE format('GRANT ALL ON public.%I TO service_role', t);
+    END LOOP;
 END $$;
 
--- Add missing columns to tasks
-ALTER TABLE public.tasks 
-    ADD COLUMN IF NOT EXISTS priority task_priority DEFAULT 'medium',
-    ADD COLUMN IF NOT EXISTS type task_type DEFAULT 'other';
-
--- Ensure permissions
-GRANT ALL ON public.tasks TO authenticated, service_role;
-GRANT SELECT ON public.tasks TO anon;
+-- Verificar e habilitar RLS em tabelas que possam ter sido criadas sem ele
+ALTER TABLE IF EXISTS public.tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.monthly_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.client_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.client_interactions ENABLE ROW LEVEL SECURITY;

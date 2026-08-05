@@ -63,14 +63,14 @@ const MonthCard = memo(({ month, index, selectedYear, report, isLoading }: any) 
 
       <div className="mt-6 grid grid-cols-2 gap-4">
         <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-          <Link
-            to="/mensais/$year/$month"
-            params={{ year: selectedYear.toString(), month: (index + 1).toString() }}
+          <Button 
+            size="sm" 
+            variant="secondary" 
+            className="text-[10px] font-bold h-7 px-2"
+            onClick={handleEdit}
           >
-            <Button size="sm" variant="secondary" className="text-[10px] font-bold h-7 px-2">
-              DETALHES & EDIÇÃO
-            </Button>
-          </Link>
+            DETALHES & EDIÇÃO
+          </Button>
         </div>
         <div className="space-y-1">
           <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
