@@ -218,9 +218,10 @@ function ClientesPage() {
                 <TableRow>
                   <TableHead>
                     <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort("name")}>
-                      Nome <ArrowUpDown className="size-3" />
+                      Cliente <ArrowUpDown className="size-3" />
                     </button>
                   </TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Contato</TableHead>
                   <TableHead>Cidade / UF</TableHead>
                   <TableHead>
@@ -240,10 +241,17 @@ function ClientesPage() {
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        {c.name}
+                        {c.name || "Sem nome"}
                         {c.deleted_at ? <Badge variant="outline" className="text-[10px]">removido</Badge> : null}
                       </div>
-                      {c.cpf ? <p className="text-xs text-muted-foreground">CPF {c.cpf}</p> : null}
+                      {c.cpf ? (
+                        <p className="text-xs text-muted-foreground">CPF {c.cpf}</p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={(c as any).status === 'active' ? 'default' : 'outline'} className="text-[10px] uppercase">
+                        {(c as any).status || 'lead'}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-sm">
                       {c.whatsapp ? <p>{c.whatsapp}</p> : c.phone ? <p>{c.phone}</p> : <span className="text-muted-foreground">—</span>}

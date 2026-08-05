@@ -1,0 +1,2 @@
+ALTER TABLE public.clients ALTER COLUMN name DROP NOT NULL;
+ALTER TABLE public.suppliers ALTER COLUMN name DROP NOT NULL;

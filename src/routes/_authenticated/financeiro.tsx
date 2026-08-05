@@ -19,7 +19,6 @@ import {
   CalendarClock,
   History,
   Search,
-  Eye,
 } from "lucide-react";
 import {
   Area,
@@ -101,9 +100,8 @@ import {
   type ExpenseInput,
   type FinancialTxInput,
 } from "@/features/finance/schemas";
-import { CheckCircle2, ArrowRightLeft, ExternalLink } from "lucide-react";
+import { CheckCircle2, ArrowRightLeft } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ReceiptField, getReceiptUrl } from "@/features/finance/ReceiptField";
 import { GoalsPanel } from "@/features/finance/GoalsPanel";
 
 
@@ -584,7 +582,7 @@ function ExpensesTab({
   to: string;
   category: string;
   setCategory: (v: string) => void;
-  expenses: Array<{ id: string; description: string | null; amount: number; category: string | null; incurred_at: string; receipt_url?: string | null }>;
+  expenses: Array<{ id: string; description: string | null; amount: number; category: string | null; incurred_at: string }>;
   loading: boolean;
 }) {
   const qc = useQueryClient();
@@ -599,7 +597,6 @@ function ExpensesTab({
       amount: 0,
       category: "Operacional",
       incurred_at: todayISO(),
-      receipt_url: null,
     },
   });
 
@@ -608,7 +605,7 @@ function ExpensesTab({
     onSuccess: () => {
       toast.success("Despesa registrada");
       setOpen(false);
-      form.reset({ description: "", amount: 0, category: "Operacional", incurred_at: todayISO(), receipt_url: null });
+      form.reset({ description: "", amount: 0, category: "Operacional", incurred_at: todayISO() });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
     onError: (e: unknown) => toast.error("Erro", { description: e instanceof Error ? e.message : "" }),
@@ -688,10 +685,6 @@ function ExpensesTab({
                     </SelectContent>
                   </Select>
                 </div>
-                <ReceiptField
-                  value={form.watch("receipt_url") ?? null}
-                  onChange={(v) => form.setValue("receipt_url", v)}
-                />
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                   <Button type="submit" disabled={createMut.isPending}>Salvar</Button>
@@ -714,7 +707,6 @@ function ExpensesTab({
                 <TableHead>Descrição</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="w-16 text-center">Comp.</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -725,7 +717,7 @@ function ExpensesTab({
                   <TableCell className="font-medium">{e.description ?? "—"}</TableCell>
                   <TableCell><Badge variant="secondary">{e.category ?? "Outros"}</Badge></TableCell>
                   <TableCell className="text-right font-semibold text-destructive">- {formatBRL(e.amount)}</TableCell>
-                  <TableCell className="text-center"><ReceiptLink path={e.receipt_url} source="expense" id={e.id} /></TableCell>
+                  
                   <TableCell>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -793,7 +785,6 @@ function MovementsTab({ from, to }: { from: string; to: string }) {
       due_date: "",
       paid_at: todayISO(),
       notes: "",
-      receipt_url: null,
     },
   });
 
@@ -812,7 +803,6 @@ function MovementsTab({ from, to }: { from: string; to: string }) {
         due_date: "",
         paid_at: todayISO(),
         notes: "",
-        receipt_url: null,
       });
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
@@ -829,7 +819,7 @@ function MovementsTab({ from, to }: { from: string; to: string }) {
   });
 
   const markPaidMut = useMutation({
-    mutationFn: (v: { id: string; paid_at: string; method: string; receipt_url: string | null }) =>
+    mutationFn: (v: { id: string; paid_at: string; method: string }) =>
       markPaidFn({ data: v }),
     onSuccess: () => {
       toast.success("Marcada como paga");
@@ -970,10 +960,6 @@ function MovementsTab({ from, to }: { from: string; to: string }) {
                   <Label>Observações</Label>
                   <Input {...form.register("notes")} />
                 </div>
-                <ReceiptField
-                  value={form.watch("receipt_url") ?? null}
-                  onChange={(v) => form.setValue("receipt_url", v)}
-                />
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                   <Button type="submit" disabled={createMut.isPending}>Salvar</Button>
@@ -998,7 +984,7 @@ function MovementsTab({ from, to }: { from: string; to: string }) {
                 <TableHead>Método</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="w-16 text-center">Comp.</TableHead>
+                
                 <TableHead className="w-24" />
               </TableRow>
             </TableHeader>
@@ -1017,9 +1003,6 @@ function MovementsTab({ from, to }: { from: string; to: string }) {
                     )}
                   >
                     {t.direction === "in" ? "+" : "-"} {formatBRL(t.amount)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <ReceiptLink path={t.receipt_url} source="transaction" id={t.id} />
                   </TableCell>
                   <TableCell className="flex items-center justify-end gap-1">
                     {t.status !== "paid" && t.status !== "cancelled" ? (
@@ -1074,12 +1057,11 @@ function MarkTxPaidDialog({
 }: {
   tx: { id: string; description: string } | null;
   onClose: () => void;
-  onConfirm: (v: { paid_at: string; method: string; receipt_url: string | null }) => void;
+  onConfirm: (v: { paid_at: string; method: string }) => void;
   pending: boolean;
 }) {
   const [paidAt, setPaidAt] = useState(todayISO());
   const [method, setMethod] = useState("pix");
-  const [receipt, setReceipt] = useState<string | null>(null);
 
   return (
     <Dialog open={!!tx} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -1105,12 +1087,11 @@ function MarkTxPaidDialog({
               </Select>
             </div>
           </div>
-          <ReceiptField value={receipt} onChange={setReceipt} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button
-            onClick={() => onConfirm({ paid_at: paidAt, method, receipt_url: receipt })}
+            onClick={() => onConfirm({ paid_at: paidAt, method })}
             disabled={pending}
           >
             Confirmar
@@ -1166,7 +1147,7 @@ function PayPayableDialog({
   const [method, setMethod] = useState<string>("pix");
   const [paidAt, setPaidAt] = useState<string>(todayISO());
   const [notes, setNotes] = useState<string>("");
-  const [receipt, setReceipt] = useState<string | null>(null);
+  
 
   const mut = useMutation({
     mutationFn: () =>
@@ -1177,7 +1158,7 @@ function PayPayableDialog({
           method,
           paid_at: paidAt,
           notes: notes || null,
-          receipt_url: receipt,
+          
         },
       }),
     onSuccess: () => {
@@ -1185,7 +1166,7 @@ function PayPayableDialog({
       setOpen(false);
       setAmount("");
       setNotes("");
-      setReceipt(null);
+      
       qc.invalidateQueries({ queryKey: ["finance"] });
       qc.invalidateQueries({ queryKey: ["order", orderId] });
     },
@@ -1250,7 +1231,6 @@ function PayPayableDialog({
             <Label>Observações</Label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
-          <ReceiptField value={receipt} onChange={setReceipt} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
@@ -1312,7 +1292,7 @@ function PayablesTab() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkPaidAt, setBulkPaidAt] = useState(todayISO());
   const [bulkMethod, setBulkMethod] = useState("pix");
-  const [bulkReceipt, setBulkReceipt] = useState<string | null>(null);
+  
   const [bulkNotes, setBulkNotes] = useState("");
 
   const bulkMut = useMutation({
@@ -1321,7 +1301,7 @@ function PayablesTab() {
         data: {
           paid_at: bulkPaidAt,
           method: bulkMethod,
-          receipt_url: bulkReceipt,
+          
           notes: bulkNotes || null,
           items: selectedRows.map((r) => ({ order_id: r.id, amount: r.balance })),
         },
@@ -1330,7 +1310,7 @@ function PayablesTab() {
       toast.success(`${res.count} pagamento(s) registrados`);
       setBulkOpen(false);
       setSelected(new Set());
-      setBulkReceipt(null);
+      
       setBulkNotes("");
       qc.invalidateQueries({ queryKey: ["finance"] });
     },
@@ -1484,7 +1464,7 @@ function PayablesTab() {
               <Label>Observações</Label>
               <Input value={bulkNotes} onChange={(e) => setBulkNotes(e.target.value)} />
             </div>
-            <ReceiptField value={bulkReceipt} onChange={setBulkReceipt} label="Comprovante (aplicado a todos)" />
+            
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkOpen(false)}>Cancelar</Button>
@@ -1551,7 +1531,7 @@ function PayableHistoryDialog({
                   <TableHead>Método</TableHead>
                   <TableHead>Observação</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="w-16 text-right">Comprovante</TableHead>
+                  
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1562,9 +1542,6 @@ function PayableHistoryDialog({
                     <TableCell className="text-muted-foreground text-xs">{p.notes ?? "—"}</TableCell>
                     <TableCell className="text-right font-semibold text-destructive">
                       - {formatBRL(p.amount)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <ReceiptLink path={p.receipt_url} source="payment" id={p.id} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1590,40 +1567,4 @@ function PayableHistoryDialog({
 }
 
 
-function ReceiptLink({
-  path,
-  source,
-  id,
-}: {
-  path: string | null | undefined;
-  source?: "expense" | "transaction" | "payment";
-  id?: string;
-}) {
-  const [loading, setLoading] = useState(false);
-  if (!path) return <span className="text-xs text-muted-foreground">—</span>;
-  async function open() {
-    setLoading(true);
-    try {
-      const url = await getReceiptUrl(path!);
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
-      else toast.error("Não foi possível abrir o comprovante");
-    } finally {
-      setLoading(false);
-    }
-  }
-  return (
-    <div className="inline-flex items-center gap-0.5">
-      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={open} disabled={loading} title="Ver comprovante">
-        <Eye className="h-3.5 w-3.5" />
-      </Button>
-      {source && id ? (
-        <Button asChild size="icon" variant="ghost" className="h-7 w-7" title="Abrir na tela de anexos">
-          <a href={`/anexos?ref_source=${source}&ref_id=${id}`} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        </Button>
-      ) : null}
-    </div>
-  );
-}
 

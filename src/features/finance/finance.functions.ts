@@ -10,49 +10,9 @@ import {
   goalSchema,
   payablesFilterSchema,
 } from "./schemas";
-import { sanitizeReceiptPath, validateReceiptMetadata } from "./receipt-validation";
-
-const RECEIPT_BUCKET = "finance-receipts";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type SupabaseCtx = any;
-
-async function validateReceiptPath(
-  supabase: SupabaseCtx,
-  path: string | null | undefined,
-): Promise<string | null> {
-  const clean = sanitizeReceiptPath(path);
-  if (!clean) return null;
-  const parts = clean.split("/");
-  const folder = parts.slice(0, -1).join("/") || "";
-  const file = parts[parts.length - 1];
-  const { data, error } = await supabase.storage
-    .from(RECEIPT_BUCKET)
-    .list(folder, { limit: 1, search: file });
-  if (error) throw new Error(`Falha ao validar comprovante: ${error.message}`);
-  const found = (data ?? []).find((f: { name: string }) => f.name === file);
-  if (!found) throw new Error("Comprovante não encontrado no storage");
-  validateReceiptMetadata(file, {
-    size: found.metadata?.size,
-    mime: found.metadata?.mimetype,
-  });
-  return clean;
-}
-
-
-async function auditReceipt(
-  supabase: SupabaseCtx,
-  opts: { actor: string; table: string; recordId: string; route: string; receipt_url: string },
-) {
-  await supabase.from("audit_log").insert({
-    table_name: opts.table,
-    record_id: opts.recordId,
-    operation: "RECEIPT_ATTACHED",
-    actor: opts.actor,
-    new_data: { route: opts.route, receipt_url: opts.receipt_url },
-  });
-}
-
 
 const idInput = z.object({ id: z.string().uuid() });
 
@@ -66,6 +26,7 @@ export const getCashFlow = createServerFn({ method: "POST" })
   .inputValidator((v) => dateRangeSchema.parse(v))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
+    if (!data.from || !data.to) throw new Error("Intervalo de datas é obrigatório");
     const fromISO = toISO(data.from);
     const toEndISO = toISO(data.to, true);
 
@@ -269,7 +230,7 @@ export const getPayableHistory = createServerFn({ method: "POST" })
     const to = from + data.pageSize - 1;
     const { data: rows, error, count } = await context.supabase
       .from("payments")
-      .select("id, amount, method, paid_at, notes, receipt_url, direction", { count: "exact" })
+      .select("id, amount, method, paid_at, notes, direction", { count: "exact" })
       .eq("order_id", data.order_id)
       .eq("direction", "out")
       .order("paid_at", { ascending: false })
@@ -285,7 +246,7 @@ export const listExpenses = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("expenses")
-      .select("id, description, amount, category, incurred_at, receipt_url, created_at")
+      .select("id, description, amount, category, incurred_at, created_at")
       .gte("incurred_at", data.from)
       .lte("incurred_at", data.to)
       .order("incurred_at", { ascending: false });
@@ -299,7 +260,6 @@ export const createExpense = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v) => expenseSchema.parse(v))
   .handler(async ({ data, context }) => {
-    const receipt = await validateReceiptPath(context.supabase, data.receipt_url);
     const { data: inserted, error } = await context.supabase
       .from("expenses")
       .insert({
@@ -307,21 +267,11 @@ export const createExpense = createServerFn({ method: "POST" })
         amount: data.amount,
         category: data.category,
         incurred_at: data.incurred_at,
-        receipt_url: receipt,
         created_by: context.userId,
       })
       .select("id")
       .single();
     if (error) throw error;
-    if (receipt && inserted?.id) {
-      await auditReceipt(context.supabase, {
-        actor: context.userId,
-        table: "expenses",
-        recordId: inserted.id,
-        route: "/financeiro:createExpense",
-        receipt_url: receipt,
-      });
-    }
     return { ok: true };
   });
 
@@ -345,7 +295,7 @@ export const listFinancialTransactions = createServerFn({ method: "POST" })
     const toISO = `${data.to}T23:59:59.999Z`;
     let q = context.supabase
       .from("financial_transactions")
-      .select("id, direction, status, description, category, amount, method, due_date, paid_at, notes, receipt_url, created_at")
+      .select("id, direction, status, description, category, amount, method, due_date, paid_at, notes, created_at")
       .or(
         `and(paid_at.gte.${fromISO},paid_at.lte.${toISO}),and(due_date.gte.${data.from},due_date.lte.${data.to})`,
       )
@@ -365,7 +315,6 @@ export const createFinancialTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v) => financialTxSchema.parse(v))
   .handler(async ({ data, context }) => {
-    const receipt = await validateReceiptPath(context.supabase, data.receipt_url);
     const paid_at =
       data.status === "paid"
         ? data.paid_at
@@ -384,21 +333,11 @@ export const createFinancialTransaction = createServerFn({ method: "POST" })
         due_date: data.due_date || null,
         paid_at,
         notes: data.notes || null,
-        receipt_url: receipt,
         created_by: context.userId,
       })
       .select("id")
       .single();
     if (error) throw error;
-    if (receipt && inserted?.id) {
-      await auditReceipt(context.supabase, {
-        actor: context.userId,
-        table: "financial_transactions",
-        recordId: inserted.id,
-        route: "/financeiro:createFinancialTransaction",
-        receipt_url: receipt,
-      });
-    }
     return { ok: true };
   });
 
@@ -418,39 +357,26 @@ const markTxPaidSchema = z.object({
   id: z.string().uuid(),
   paid_at: z.string().optional().nullable(),
   method: z.string().trim().max(40).optional().nullable(),
-  receipt_url: z.string().trim().max(500).optional().nullable(),
 });
 
 export const markTransactionPaid = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v) => markTxPaidSchema.parse(v))
   .handler(async ({ data, context }) => {
-    const receipt = await validateReceiptPath(context.supabase, data.receipt_url);
     const patch: {
       status: "paid";
       paid_at: string;
       method?: string;
-      receipt_url?: string;
     } = {
       status: "paid",
       paid_at: data.paid_at ? new Date(data.paid_at).toISOString() : new Date().toISOString(),
     };
     if (data.method) patch.method = data.method;
-    if (receipt) patch.receipt_url = receipt;
     const { error } = await context.supabase
       .from("financial_transactions")
       .update(patch)
       .eq("id", data.id);
     if (error) throw error;
-    if (receipt) {
-      await auditReceipt(context.supabase, {
-        actor: context.userId,
-        table: "financial_transactions",
-        recordId: data.id,
-        route: "/financeiro:markTransactionPaid",
-        receipt_url: receipt,
-      });
-    }
     return { ok: true };
   });
 
@@ -461,14 +387,12 @@ const payPayableSchema = z.object({
   method: z.string().trim().max(40).optional().nullable(),
   paid_at: z.string().optional().nullable(),
   notes: z.string().trim().max(500).optional().nullable(),
-  receipt_url: z.string().trim().max(500).optional().nullable(),
 });
 
 export const payPayable = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v) => payPayableSchema.parse(v))
   .handler(async ({ data, context }) => {
-    const receipt = await validateReceiptPath(context.supabase, data.receipt_url);
     const paidAt = data.paid_at
       ? new Date(data.paid_at).toISOString()
       : new Date().toISOString();
@@ -481,28 +405,17 @@ export const payPayable = createServerFn({ method: "POST" })
         method: data.method || null,
         paid_at: paidAt,
         notes: data.notes || null,
-        receipt_url: receipt,
         created_by: context.userId,
       })
       .select("id")
       .single();
     if (error) throw error;
-    if (receipt && inserted?.id) {
-      await auditReceipt(context.supabase, {
-        actor: context.userId,
-        table: "payments",
-        recordId: inserted.id,
-        route: "/financeiro:payPayable",
-        receipt_url: receipt,
-      });
-    }
     return { ok: true };
   });
 
 const bulkPayPayableSchema = z.object({
   paid_at: z.string().optional().nullable(),
   method: z.string().trim().max(40).optional().nullable(),
-  receipt_url: z.string().trim().max(500).optional().nullable(),
   notes: z.string().trim().max(500).optional().nullable(),
   items: z
     .array(z.object({ order_id: z.string().uuid(), amount: z.number().positive() }))
@@ -514,7 +427,6 @@ export const bulkPayPayables = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v) => bulkPayPayableSchema.parse(v))
   .handler(async ({ data, context }) => {
-    const receipt = await validateReceiptPath(context.supabase, data.receipt_url);
     const paidAt = data.paid_at
       ? new Date(data.paid_at).toISOString()
       : new Date().toISOString();
@@ -525,7 +437,6 @@ export const bulkPayPayables = createServerFn({ method: "POST" })
       method: data.method || null,
       paid_at: paidAt,
       notes: data.notes || null,
-      receipt_url: receipt,
       created_by: context.userId,
     }));
     const { data: inserted, error } = await context.supabase
@@ -533,16 +444,6 @@ export const bulkPayPayables = createServerFn({ method: "POST" })
       .insert(rows)
       .select("id");
     if (error) throw error;
-    if (receipt && inserted?.length) {
-      const auditRows = inserted.map((r: { id: string }) => ({
-        table_name: "payments",
-        record_id: r.id,
-        operation: "RECEIPT_ATTACHED",
-        actor: context.userId,
-        new_data: { route: "/financeiro:bulkPayPayables", receipt_url: receipt },
-      }));
-      await context.supabase.from("audit_log").insert(auditRows);
-    }
     return { ok: true, count: rows.length };
   });
 

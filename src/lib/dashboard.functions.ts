@@ -1,13 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-
 export interface DashboardStats {
   revenueMonth: number;
   profitMonth: number;
   profitGrossMonth: number;
-
-
   expensesMonth: number;
   receivable: number;
   payable: number;
@@ -28,6 +25,11 @@ export interface DashboardStats {
     profitDelta: number;
   };
   topProducts: Array<{ label: string; quantity: number; revenue: number }>;
+  crm: {
+    pendingTasks: number;
+    atRiskClients: number;
+    upcomingEvents: Array<{ id: string; title: string; due_date: string }>;
+  };
   pipeline: {
     awaitingPayment: number;
     inTransit: number;
@@ -43,8 +45,6 @@ export interface DashboardStats {
     created_at: string;
   }>;
 }
-
-
 
 const PIPELINE_AWAITING = new Set([
   "new",
@@ -63,15 +63,14 @@ export const getDashboardStats = createServerFn({ method: "GET" })
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-    // All non-deleted orders (bounded by soft-delete filter; small tables here)
-    const [ordersRes, clientsRes, paymentsRes, expensesRes, eventsRes] = await Promise.all([
+    const [ordersRes, clientsRes, paymentsRes, expensesRes, eventsRes, tasksRes, overridesRes] = await Promise.all([
       supabase
         .from("orders")
         .select(
           "id, order_number, status, brand, model, sale_price, cost_price, amount_received, quantity, commission, card_fee, shipping, other_costs, created_at",
         )
         .is("deleted_at", null),
-      supabase.from("clients").select("id", { count: "exact", head: true }).is("deleted_at", null),
+      supabase.from("clients").select("id, last_interaction_at", { count: "exact" }).is("deleted_at", null),
       supabase.from("payments").select("direction, amount, paid_at"),
       supabase.from("expenses").select("amount, incurred_at").gte("incurred_at", sixMonthsAgo.toISOString().slice(0, 10)),
       supabase
@@ -79,19 +78,40 @@ export const getDashboardStats = createServerFn({ method: "GET" })
         .select("id, type, message, order_id, created_at, orders!inner(order_number)")
         .order("created_at", { ascending: false })
         .limit(12),
-    ]);
+      (supabase as any).from("tasks").select("*").eq("status", "pending").gte("due_date", now.toISOString().slice(0, 10)).limit(10),
+      (supabase as any).from("monthly_report_overrides").select("*").gte("year", now.getFullYear() - 1),
+    ]).catch(err => {
+      console.error("[Dashboard Critical Query Failure]:", err);
+      throw err;
+    });
 
-
-
-    if (ordersRes.error) throw ordersRes.error;
-    if (paymentsRes.error) throw paymentsRes.error;
-    if (eventsRes.error) throw eventsRes.error;
+    if (ordersRes.error) {
+      console.error("[Dashboard: orders fetch failed]", ordersRes.error);
+      throw ordersRes.error;
+    }
+    if (paymentsRes.error) {
+      console.error("[Dashboard: payments fetch failed]", paymentsRes.error);
+      throw paymentsRes.error;
+    }
+    if (eventsRes.error) {
+      console.error("[Dashboard: events fetch failed]", eventsRes.error);
+      throw eventsRes.error;
+    }
+    
+    // Non-critical failures log errors but don't crash
+    if (tasksRes.error && tasksRes.error.code !== 'PGRST116') {
+       console.error("[Dashboard Non-Critical: tasks fetch failed]", tasksRes.error);
+    }
+    if (overridesRes.error) {
+      console.error("[Dashboard Non-Critical: overrides fetch failed]", overridesRes.error);
+    }
+    
+    const overrides = (overridesRes.data || []) as any[];
 
     const orders = ordersRes.data ?? [];
     const payments = paymentsRes.data ?? [];
     const expenses = expensesRes.data ?? [];
 
-    // Month buckets — last 6 months, oldest first
     const months: Array<{ key: string; label: string; revenue: number; profit: number; orders: number }> = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -122,14 +142,14 @@ export const getDashboardStats = createServerFn({ method: "GET" })
     const productTally = new Map<string, { quantity: number; revenue: number }>();
 
     for (const o of orders) {
-      const qty = Number((o as { quantity?: number }).quantity ?? 1) || 1;
+      const qty = Number((o as any).quantity ?? 1) || 1;
       const sale = Number(o.sale_price ?? 0) * qty;
       const cost = Number(o.cost_price ?? 0) * qty;
       const received = Number(o.amount_received ?? 0);
-      const commission = Number((o as { commission?: number }).commission ?? 0);
-      const cardFee = Number((o as { card_fee?: number }).card_fee ?? 0);
-      const shipping = Number((o as { shipping?: number }).shipping ?? 0);
-      const otherCosts = Number((o as { other_costs?: number }).other_costs ?? 0);
+      const commission = Number((o as any).commission ?? 0);
+      const cardFee = Number((o as any).card_fee ?? 0);
+      const shipping = Number((o as any).shipping ?? 0);
+      const otherCosts = Number((o as any).other_costs ?? 0);
       const profit = sale - cost - commission - cardFee - shipping - otherCosts;
       const created = new Date(o.created_at);
       const key = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}`;
@@ -153,8 +173,8 @@ export const getDashboardStats = createServerFn({ method: "GET" })
           pendingMonth += Math.max(sale - received, 0);
           watchesSoldMonth += qty;
           const label = [
-            (o as { brand?: string }).brand,
-            (o as { model?: string }).model,
+            (o as any).brand,
+            (o as any).model,
           ].filter(Boolean).join(" ") || "Sem descrição";
           const cur = productTally.get(label) ?? { quantity: 0, revenue: 0 };
           cur.quantity += qty;
@@ -171,7 +191,6 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       else if (PIPELINE_DELIVERED.has(status)) pipeline.delivered += 1;
     }
 
-    // Payable = supplier outflows (payments.direction='out') + expenses in current month
     const monthStart = startOfMonth.slice(0, 10);
     let payable = 0;
     for (const p of payments) {
@@ -185,7 +204,6 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       }
     }
 
-    // Separate expenses for the current month (payables = expenses subtracted from profit)
     let expensesMonth = 0;
     for (const p of payments) {
       if (p.direction === "out" && p.paid_at && p.paid_at >= monthStart) {
@@ -198,18 +216,14 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       }
     }
 
-    // Net profit = gross profit - expenses (no tax).
     const profitGrossMonth = profitMonth;
     const profitNetMonth = profitGrossMonth - Math.max(0, expensesMonth);
 
-
-
-
     const nonCancelled = orders.filter((o) => String(o.status) !== "cancelled");
-    const totalRevenue = nonCancelled.reduce((s, o) => s + Number(o.sale_price ?? 0) * Number((o as { quantity?: number }).quantity ?? 1), 0);
+    const totalRevenue = nonCancelled.reduce((s, o) => s + Number(o.sale_price ?? 0) * Number((o as any).quantity ?? 1), 0);
     const totalProfit = nonCancelled.reduce(
       (s, o) => {
-        const q = Number((o as { quantity?: number }).quantity ?? 1);
+        const q = Number((o as any).quantity ?? 1);
         return s + (Number(o.sale_price ?? 0) * q - Number(o.cost_price ?? 0) * q);
       },
       0,
@@ -225,21 +239,13 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       profitDelta: (prevBucket?.profit ?? 0) !== 0 ? ((profitNetMonth - (prevBucket?.profit ?? 0)) / Math.abs(prevBucket?.profit ?? 1)) * 100 : 0,
     };
 
-
     const topProducts = Array.from(productTally.entries())
       .map(([label, v]) => ({ label, quantity: v.quantity, revenue: v.revenue }))
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5);
 
     const activity = (eventsRes.data ?? []).map((row) => {
-      const rel = row as unknown as {
-        id: string;
-        type: string;
-        message: string | null;
-        order_id: string;
-        created_at: string;
-        orders: { order_number: number | null } | null;
-      };
+      const rel = row as any;
       return {
         id: rel.id,
         type: rel.type,
@@ -250,20 +256,50 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       };
     });
 
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const atRiskClients = (clientsRes.data || []).filter((c: any) => {
+      if (!c.last_interaction_at) return true;
+      return new Date(c.last_interaction_at) < thirtyDaysAgo;
+    }).length;
+
+    const curOverride = overrides.find(o => o?.year === now.getFullYear() && o?.month === (now.getMonth() + 1));
+
+    // Fallback safe calculations
+    const finalRevenueMonth = (curOverride?.revenue_override !== null && curOverride?.revenue_override !== undefined) 
+      ? Number(curOverride.revenue_override) 
+      : (revenueMonth || 0);
+      
+    const finalExpensesMonth = (curOverride?.expenses_override !== null && curOverride?.expenses_override !== undefined) 
+      ? Number(curOverride.expenses_override) 
+      : (expensesMonth || 0);
+      
+    const finalProfitMonth = (curOverride?.profit_override !== null && curOverride?.profit_override !== undefined) 
+      ? Number(curOverride.profit_override) 
+      : (profitNetMonth || 0);
+      
+    const finalOrdersMonth = (curOverride?.orders_count_override !== null && curOverride?.orders_count_override !== undefined) 
+      ? Number(curOverride.orders_count_override) 
+      : (ordersMonth || 0);
+
     return {
-      revenueMonth,
-      profitMonth: profitNetMonth,
-      profitGrossMonth,
-
-
-
-      expensesMonth,
-      receivable,
-      payable,
-      ordersMonth,
+      revenueMonth: finalRevenueMonth,
+      profitMonth: finalProfitMonth,
+      profitGrossMonth: (curOverride?.revenue_override !== null && curOverride?.revenue_override !== undefined) 
+        ? Number(curOverride.revenue_override) 
+        : (profitGrossMonth || 0),
+      expensesMonth: finalExpensesMonth,
+      receivable: receivable || 0,
+      payable: payable || 0,
+      ordersMonth: finalOrdersMonth,
       clientsTotal: clientsRes.count ?? 0,
       avgTicket,
       avgProfit,
+      crm: {
+        pendingTasks: tasksRes.data?.length ?? 0,
+        atRiskClients,
+        upcomingEvents: (tasksRes.data || []).slice(0, 5).map((t: any) => ({ id: t.id, title: t.title, due_date: t.due_date })),
+      },
       commissionMonth,
       cardFeesMonth,
       shippingMonth,
@@ -273,14 +309,19 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       monthComparison,
       topProducts,
       pipeline,
-      monthly: months.map(({ label, revenue, profit, orders: o }) => ({
-        month: label,
-        revenue,
-        profit,
-        orders: o,
-      })),
+      monthly: months.map(({ key, label, revenue, profit, orders: o }) => {
+        const [yStr, mStr] = key.split("-");
+        const y = parseInt(yStr);
+        const m = parseInt(mStr);
+        const ovr = overrides.find(ov => ov.year === y && ov.month === m);
+        
+        return {
+          month: label,
+          revenue: (ovr?.revenue_override !== null && ovr?.revenue_override !== undefined) ? Number(ovr.revenue_override) : (revenue || 0),
+          profit: (ovr?.profit_override !== null && ovr?.profit_override !== undefined) ? Number(ovr.profit_override) : (profit || 0),
+          orders: (ovr?.orders_count_override !== null && ovr?.orders_count_override !== undefined) ? Number(ovr.orders_count_override) : (o || 0),
+        };
+      }),
       activity,
     };
   });
-
-

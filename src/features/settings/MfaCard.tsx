@@ -201,7 +201,7 @@ export function MfaCard() {
             <div className="space-y-2">
               <p className="text-sm font-medium">1. Escaneie o QR no seu autenticador</p>
               <div className="rounded-lg border border-border bg-background p-3">
-                <img src={state.qr} alt="QR code para 2FA" className="mx-auto size-44" />
+                <img src={state.qr} alt="QR code para 2FA" loading="lazy" className="mx-auto size-44" />
               </div>
               <p className="text-xs text-muted-foreground">
                 Ou insira manualmente:

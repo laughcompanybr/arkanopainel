@@ -43,7 +43,7 @@ export const productSchema = z.object({
   stock_qty: optionalInt(),
   min_stock: optionalInt(),
   status: z.enum(PRODUCT_STATUS).default("active"),
-  image_url: optionalStr(500),
+  
   notes: optionalStr(2000),
 });
 

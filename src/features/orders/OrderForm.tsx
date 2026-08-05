@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, TrendingUp, MapPin, Upload, ImageIcon } from "lucide-react";
+import { Loader2, TrendingUp, MapPin } from "lucide-react";
 import { formatBRL } from "@/lib/format";
 
 interface Props {
@@ -56,7 +56,7 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
 
       model: "",
       reference: "",
-      photo_path: "",
+      
       quantity: 1,
       sale_price: 0,
       cost_price: 0,
@@ -100,7 +100,7 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
   const shipping = Number(useWatch({ control, name: "shipping" }) ?? 0);
   const otherCosts = Number(useWatch({ control, name: "other_costs" }) ?? 0);
   const received = Number(useWatch({ control, name: "amount_received" }) ?? 0);
-  const photoPath = String(useWatch({ control, name: "photo_path" }) ?? "");
+  
   const paymentMethod = String(useWatch({ control, name: "payment_method" }) ?? "");
   const isCardPayment = /cart[aã]o/i.test(paymentMethod);
 
@@ -149,7 +149,7 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
   }, [selectedClientId, customShip]);
 
 
-  const [uploading, setUploading] = useState(false);
+  
   // Card fee is entered as a % of the sale total; card_fee (BRL) is derived.
   const initialFeePct =
     totalSale > 0 && Number(defaultValues?.card_fee ?? 0) > 0
@@ -201,26 +201,6 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
     }
   }
 
-  async function handlePhotoUpload(file: File) {
-    if (file.size > 8 * 1024 * 1024) {
-      toast.error("Foto excede 8MB");
-      return;
-    }
-    setUploading(true);
-    try {
-      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `watches/${Date.now()}-${safe}`;
-      const { error } = await supabase.storage.from("order-files").upload(path, file, { contentType: file.type });
-      if (error) throw error;
-      setValue("photo_path", path, { shouldDirty: true });
-      toast.success("Foto anexada");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }
 
   const err = (name: keyof OrderInput) =>
     errors[name] ? <p className="text-xs text-destructive">{errors[name]?.message as string}</p> : null;
@@ -263,42 +243,6 @@ export function OrderForm({ defaultValues, submitLabel = "Salvar", onSubmit, onC
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-muted/20 p-4">
-        <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          <ImageIcon className="size-3.5" /> Foto do relógio
-        </p>
-        <div className="flex items-center gap-4">
-          <div className="size-24 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
-            {photoPath ? (
-              <div className="grid h-full w-full place-items-center text-xs text-muted-foreground">
-                <ImageIcon className="size-6" />
-              </div>
-            ) : (
-              <div className="grid h-full w-full place-items-center text-muted-foreground">
-                <ImageIcon className="size-6" />
-              </div>
-            )}
-          </div>
-          <div className="flex-1">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }}
-            />
-            <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
-              {uploading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Upload className="mr-2 size-4" />}
-              {photoPath ? "Trocar foto" : "Enviar foto"}
-            </Button>
-            {photoPath ? (
-              <p className="mt-1 truncate text-xs text-muted-foreground">{photoPath}</p>
-            ) : (
-              <p className="mt-1 text-xs text-muted-foreground">JPG, PNG ou WEBP, até 8MB.</p>
-            )}
-          </div>
-        </div>
-      </div>
 
       <div className="rounded-xl border border-border bg-muted/20 p-4">
         <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Financeiro</p>

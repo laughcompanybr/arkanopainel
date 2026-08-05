@@ -103,7 +103,7 @@ export const orderSchema = z.object({
   brand: optionalStr(80),
   model: optionalStr(120),
   reference: optionalStr(120),
-  photo_path: optionalStr(500),
+  
   quantity: qty,
   sale_price: money,
   cost_price: money,

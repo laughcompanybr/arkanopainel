@@ -16,7 +16,7 @@ export const listOrders = createServerFn({ method: "POST" })
     let q = supabase
       .from("orders")
       .select(
-        "id, order_number, status, brand, model, reference, photo_path, quantity, sale_price, cost_price, commission, card_fee, shipping, other_costs, amount_received, profit, purchase_date, expected_delivery, tracking_code, notes, payment_method, created_at, updated_at, deleted_at, client_id, supplier_id, employee_id, clients(id,name,whatsapp), suppliers(id,name), employees(id,full_name)",
+        "id, order_number, status, brand, model, reference, quantity, sale_price, cost_price, commission, card_fee, shipping, other_costs, amount_received, profit, purchase_date, expected_delivery, tracking_code, notes, payment_method, created_at, updated_at, deleted_at, client_id, supplier_id, employee_id, clients(id,name,whatsapp), suppliers(id,name), employees(id,full_name)",
         { count: "exact" },
       );
 
@@ -52,7 +52,7 @@ export const getOrder = createServerFn({ method: "POST" })
   .inputValidator((v) => idInput.parse(v))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const [orderRes, paymentsRes, eventsRes, attachmentsRes] = await Promise.all([
+    const [orderRes, paymentsRes, eventsRes] = await Promise.all([
       supabase
         .from("orders")
         .select("*, clients(id,name,whatsapp,phone,instagram), suppliers(id,name,company,whatsapp), employees(id,full_name,role)")
@@ -67,11 +67,6 @@ export const getOrder = createServerFn({ method: "POST" })
       supabase
         .from("order_events")
         .select("id, type, message, meta, actor, created_at")
-        .eq("order_id", data.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("order_attachments")
-        .select("id, filename, mime, size, kind, storage_path, created_at")
         .eq("order_id", data.id)
         .order("created_at", { ascending: false }),
     ]);
@@ -93,20 +88,11 @@ export const getOrder = createServerFn({ method: "POST" })
       Number(o.card_fee ?? 0) -
       Number(o.shipping ?? 0) -
       Number(o.other_costs ?? 0);
-    let photoUrl: string | null = null;
-    if (o.photo_path) {
-      const { data: signed } = await supabase.storage
-        .from("order-files")
-        .createSignedUrl(o.photo_path as string, 60 * 60);
-      photoUrl = signed?.signedUrl ?? null;
-    }
 
     return {
       order: orderRes.data,
       payments,
       events: eventsRes.data ?? [],
-      attachments: attachmentsRes.data ?? [],
-      photoUrl,
       totals: {
         totalIn,
         totalOut,
@@ -302,55 +288,6 @@ export const addMixedPayments = createServerFn({ method: "POST" })
     return { ok: true, count: inserted?.length ?? 0, sum };
   });
 
-// ---------------- attachments ----------------
-const attachmentInput = z.object({
-  order_id: z.string().uuid(),
-  storage_path: z.string().min(1).max(500),
-  filename: z.string().max(200).nullable().optional(),
-  mime: z.string().max(120).nullable().optional(),
-  size: z.number().int().nonnegative().nullable().optional(),
-  kind: z.string().max(60).nullable().optional(),
-});
-
-export const addOrderAttachment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((v) => attachmentInput.parse(v))
-  .handler(async ({ data, context }) => {
-    const { data: row, error } = await context.supabase
-      .from("order_attachments")
-      .insert({ ...data, uploaded_by: context.userId })
-      .select("id")
-      .single();
-    if (error) throw error;
-    await context.supabase.from("order_events").insert({
-      order_id: data.order_id,
-      type: "attachment",
-      message: `Anexo adicionado: ${data.filename ?? "arquivo"}`,
-      actor: context.userId,
-    });
-    return { id: row.id };
-  });
-
-export const deleteOrderAttachment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((v) => z.object({ id: z.string().uuid(), storage_path: z.string() }).parse(v))
-  .handler(async ({ data, context }) => {
-    await context.supabase.storage.from("order-files").remove([data.storage_path]);
-    const { error } = await context.supabase.from("order_attachments").delete().eq("id", data.id);
-    if (error) throw error;
-    return { ok: true };
-  });
-
-export const signOrderAttachment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((v) => z.object({ storage_path: z.string() }).parse(v))
-  .handler(async ({ data, context }) => {
-    const { data: signed, error } = await context.supabase.storage
-      .from("order-files")
-      .createSignedUrl(data.storage_path, 60 * 10);
-    if (error) throw error;
-    return { url: signed.signedUrl };
-  });
 
 // ---------------- lookups ----------------
 export const listClientOptions = createServerFn({ method: "GET" })

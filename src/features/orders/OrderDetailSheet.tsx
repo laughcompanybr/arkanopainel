@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -8,9 +8,6 @@ import {
   changeOrderStatus,
   addMixedPayments,
   deletePayment,
-  addOrderAttachment,
-  deleteOrderAttachment,
-  signOrderAttachment,
 } from "./orders.functions";
 import { getCardFeePercent } from "@/features/settings/settings.functions";
 import {
@@ -38,9 +35,6 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2,
-  Paperclip,
-  Upload,
-  Download,
   Trash2,
   Activity,
   Wallet,
@@ -62,18 +56,12 @@ interface Props {
   onOpenChange: (o: boolean) => void;
 }
 
-function formatBytes(n: number | null | undefined) {
-  if (!n) return "—";
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 const EVENT_LABEL: Record<string, string> = {
   created: "Pedido criado",
   status_changed: "Status alterado",
   payment: "Pagamento",
-  attachment: "Anexo",
+  
 };
 
 export function OrderDetailSheet({ orderId, open, onOpenChange }: Props) {
@@ -84,13 +72,8 @@ export function OrderDetailSheet({ orderId, open, onOpenChange }: Props) {
   const addMixedFn = useServerFn(addMixedPayments);
   const delPayFn = useServerFn(deletePayment);
   const cardFeeFn = useServerFn(getCardFeePercent);
-  const addAttachFn = useServerFn(addOrderAttachment);
-  const delAttachFn = useServerFn(deleteOrderAttachment);
-  const signFn = useServerFn(signOrderAttachment);
 
   const [editing, setEditing] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const query = useQuery({
     queryKey: ["order", orderId],
@@ -145,38 +128,6 @@ export function OrderDetailSheet({ orderId, open, onOpenChange }: Props) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const delAttachMut = useMutation({
-    mutationFn: (v: { id: string; storage_path: string }) => delAttachFn({ data: v }),
-    onSuccess: () => { toast.success("Anexo removido"); invalidate(); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const handleUpload = useCallback(async (file: File) => {
-    if (!orderId) return;
-    if (file.size > 15 * 1024 * 1024) return toast.error("Arquivo excede 15MB");
-    setUploading(true);
-    try {
-      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${orderId}/${Date.now()}-${safe}`;
-      const { error: upErr } = await supabase.storage.from("order-files").upload(path, file, { contentType: file.type });
-      if (upErr) throw upErr;
-      await addAttachFn({
-        data: { order_id: orderId, storage_path: path, filename: file.name, mime: file.type || null, size: file.size, kind: null },
-      });
-      toast.success("Anexo enviado");
-      invalidate();
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
-  }, [orderId, addAttachFn]); // eslint-disable-line
-
-  const handleDownload = async (storage_path: string, filename: string | null) => {
-    try {
-      const { url } = await signFn({ data: { storage_path } });
-      const a = document.createElement("a");
-      a.href = url; a.download = filename ?? "arquivo"; a.target = "_blank"; a.rel = "noopener";
-      document.body.appendChild(a); a.click(); a.remove();
-    } catch (e) { toast.error((e as Error).message); }
-  };
 
   const order = query.data?.order;
   const client = order?.clients as { name?: string; whatsapp?: string | null; instagram?: string | null } | null;
@@ -233,9 +184,6 @@ export function OrderDetailSheet({ orderId, open, onOpenChange }: Props) {
                 <TabsTrigger value="tracking" className="flex-1">
                   <Truck className="mr-1 size-3.5" /> Rastreio
                 </TabsTrigger>
-                <TabsTrigger value="attachments" className="flex-1">
-                  <Paperclip className="mr-1 size-3.5" /> Anexos ({query.data?.attachments.length ?? 0})
-                </TabsTrigger>
                 <TabsTrigger value="timeline" className="flex-1">
                   <Activity className="mr-1 size-3.5" /> Timeline
                 </TabsTrigger>
@@ -250,7 +198,7 @@ export function OrderDetailSheet({ orderId, open, onOpenChange }: Props) {
                       brand: order.brand ?? "",
                       model: order.model ?? "",
                       reference: order.reference ?? "",
-                      photo_path: order.photo_path ?? "",
+                      
                       quantity: order.quantity ?? 1,
                       sale_price: order.sale_price,
                       cost_price: order.cost_price,
@@ -287,11 +235,6 @@ export function OrderDetailSheet({ orderId, open, onOpenChange }: Props) {
                       </Button>
                     </div>
 
-                    {query.data?.photoUrl ? (
-                      <div className="overflow-hidden rounded-xl border border-border bg-muted/30">
-                        <img src={query.data.photoUrl} alt={order.model ?? "Relógio"} className="max-h-72 w-full object-contain" />
-                      </div>
-                    ) : null}
 
                     <dl className="grid grid-cols-2 gap-4 text-sm">
                       <Info label="Cliente" value={client?.name} />
@@ -431,50 +374,6 @@ export function OrderDetailSheet({ orderId, open, onOpenChange }: Props) {
                 </dl>
               </TabsContent>
 
-              <TabsContent value="attachments" className="mt-4 space-y-3">
-                <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => fileRef.current?.click()} disabled={uploading} className="flex-1">
-                    {uploading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Upload className="mr-2 size-4" />}
-                    Enviar anexo
-                  </Button>
-                  <Button asChild variant="outline">
-                    <a
-                      href={`/anexos?order_id=${order.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="mr-2 size-4" /> Comprovantes financeiros
-                    </a>
-                  </Button>
-                </div>
-
-                {query.data?.attachments.length ? (
-                  <ul className="divide-y divide-border rounded-lg border border-border">
-                    {query.data.attachments.map((a) => (
-                      <li key={a.id} className="flex items-center gap-3 p-3">
-                        <Paperclip className="size-4 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{a.filename ?? "arquivo"}</p>
-                          <p className="text-xs text-muted-foreground">{formatBytes(a.size)} · {formatDate(a.created_at)}</p>
-                        </div>
-                        <Button size="icon" variant="ghost" onClick={() => handleDownload(a.storage_path, a.filename)}>
-                          <Download className="size-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => { if (confirm("Remover anexo?")) delAttachMut.mutate({ id: a.id, storage_path: a.storage_path }); }}
-                        >
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="py-8 text-center text-sm text-muted-foreground">Nenhum anexo enviado.</p>
-                )}
-              </TabsContent>
 
               <TabsContent value="timeline" className="mt-4">
                 {query.data?.events.length ? (

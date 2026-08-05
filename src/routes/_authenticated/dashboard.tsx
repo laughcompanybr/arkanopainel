@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, lazy } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -34,11 +34,13 @@ import {
 
 
 import { PageHeader } from "@/components/common/PageHeader";
-import { EmptyState } from "@/components/common/EmptyState";
-import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
-import { formatBRL, formatNumber } from "@/lib/format";
+const EmptyState = lazy(() => import("@/components/common/EmptyState").then(m => ({ default: m.EmptyState })));
+const DashboardSkeleton = lazy(() => import("@/components/dashboard/DashboardSkeleton").then(m => ({ default: m.DashboardSkeleton })));
+import { formatBRL, formatNumber, formatDate } from "@/lib/format";
 import { getDashboardStats, type DashboardStats } from "@/lib/dashboard.functions";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 const dashboardQueryOptions = (fn: () => Promise<DashboardStats>) =>
   queryOptions({
@@ -167,6 +169,18 @@ function DashboardContent() {
 
   return (
     <div className="space-y-4">
+      {/* CRM ALERTS */}
+      {data.crm.atRiskClients > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning"
+        >
+          <Activity className="size-5" />
+          <p>Você possui <strong>{data.crm.atRiskClients}</strong> clientes sem contato há mais de 30 dias.</p>
+        </motion.div>
+      )}
+
       {/* HERO KPIs — dense bento row */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiTile
@@ -194,11 +208,37 @@ function DashboardContent() {
         <KpiTile
           eyebrow="Despesas · mês"
           value={formatBRL(data.expensesMonth)}
-          hint="Abatido do lucro"
-          icon={ReceiptText}
-          accent="destructive"
+          icon={ArrowDownRight}
+          accent="warning"
           delay={0.12}
         />
+      </section>
+
+      {/* Agenda & Clientes Bento Row */}
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="bento-tile p-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Próximos compromissos</p>
+          <div className="mt-4 space-y-3">
+            {data.crm.upcomingEvents.length ? (
+              data.crm.upcomingEvents.map(e => (
+                <div key={e.id} className="flex items-center justify-between text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{e.title}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(e.due_date)}</p>
+                  </div>
+                  <Badge variant="outline" className="ml-2 shrink-0 text-[10px]">Agenda</Badge>
+                </div>
+              ))
+            ) : (
+              <p className="py-4 text-center text-xs text-muted-foreground">Sem compromissos agendados.</p>
+            )}
+            <Button size="sm" variant="ghost" className="w-full text-xs" asChild>
+              <a href="/agenda">Ver agenda completa</a>
+            </Button>
+          </div>
+        </div>
+
+        <RevenueChart data={data.monthly} className="lg:col-span-2" />
       </section>
 
       {/* Detalhamento do mês — auditoria rápida do cálculo do lucro líquido */}
@@ -383,7 +423,7 @@ function KpiTile({
   value: string;
   hint?: string;
   icon?: React.ComponentType<{ className?: string }>;
-  accent?: "default" | "gold" | "success" | "warning" | "destructive";
+  accent?: "default" | "gold" | "success" | "warning";
   delay?: number;
   featured?: boolean;
 }) {
@@ -393,10 +433,8 @@ function KpiTile({
       : accent === "success"
         ? "text-[color:var(--color-success)]"
         : accent === "warning"
-          ? "text-[color:var(--color-warning)]"
-          : accent === "destructive"
-            ? "text-destructive"
-            : "text-foreground";
+          ? "text-destructive"
+          : "text-foreground";
 
   return (
     <motion.div
@@ -422,7 +460,8 @@ function KpiTile({
         className={cn(
           "mt-5 font-display leading-none tracking-tight",
           featured ? "text-3xl sm:text-[2.1rem]" : "text-2xl sm:text-[1.7rem]",
-          featured && accent === "gold" ? "text-gold-shine" : accentText,
+          featured && accent === "gold" ? "text-gold-shine" : 
+          accent === "warning" ? "text-destructive-shine" : accentText,
         )}
       >
         {value}

@@ -30,6 +30,9 @@ export function ClientForm({ defaultValues, submitLabel = "Salvar", onSubmit, on
     resolver: zodResolver(clientSchema) as never,
     defaultValues: {
       name: "",
+      company_name: "",
+      status: "lead",
+      email: "",
       cpf: "",
       phone: "",
       whatsapp: "",
@@ -79,7 +82,9 @@ export function ClientForm({ defaultValues, submitLabel = "Salvar", onSubmit, on
 
   const field = (name: keyof ClientInput, label: string, extra?: React.InputHTMLAttributes<HTMLInputElement>) => (
     <div className="space-y-1.5">
-      <Label htmlFor={name}>{label}</Label>
+      <Label htmlFor={name}>
+        {label}
+      </Label>
       <Input id={name} {...register(name)} {...extra} />
       {errors[name] ? <p className="text-xs text-destructive">{errors[name]?.message as string}</p> : null}
     </div>
@@ -93,7 +98,22 @@ export function ClientForm({ defaultValues, submitLabel = "Salvar", onSubmit, on
       className="space-y-5"
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        {field("name", "Nome completo")}
+        {field("name", "Nome completo", { placeholder: "Deixe em branco se for opcional" })}
+        <div className="space-y-1.5">
+          <Label htmlFor="status">Status</Label>
+          <select
+            id="status"
+            {...register("status")}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="lead">Lead</option>
+            <option value="prospect">Prospect</option>
+            <option value="active">Cliente Ativo</option>
+            <option value="inactive">Cliente Inativo</option>
+            <option value="lost">Cliente Perdido</option>
+          </select>
+        </div>
+        {field("email", "E-mail", { type: "email", placeholder: "contato@exemplo.com" })}
         {field("cpf", "CPF", { placeholder: "000.000.000-00", inputMode: "numeric" })}
         {field("phone", "Telefone", { placeholder: "(11) 99999-9999", inputMode: "tel" })}
         {field("whatsapp", "WhatsApp", { placeholder: "(11) 99999-9999", inputMode: "tel" })}

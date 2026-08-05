@@ -4,7 +4,7 @@ const optionalTrim = z
   .string()
   .trim()
   .max(200)
-  .nullish()
+  .optional()
   .transform((v) => (v && v.length ? v : null))
   .nullable();
 
@@ -25,12 +25,12 @@ const optionalPhone = z
   .transform((v) => (v === "" ? null : v));
 
 export const clientSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .max(120)
-    .nullish()
-    .transform((v) => (v && v.length ? v : "Sem nome")),
+  name: optionalTrim.default(""),
+  company_name: optionalTrim,
+  status: z.enum(['lead', 'prospect', 'active', 'inactive', 'lost']).default('lead'),
+  responsible_id: z.string().uuid().nullish(),
+  source: optionalTrim,
+  email: z.string().email("E-mail inválido").nullish().or(z.literal("")),
   cpf: optionalCpf,
   phone: optionalPhone,
   whatsapp: optionalPhone,

@@ -99,10 +99,13 @@ export const createClient = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: row, error } = await supabase
       .from("clients")
-      .insert({ ...data, created_by: userId })
+      .insert({ ...data, created_by: userId } as any)
       .select("id")
       .single();
-    if (error) throw error;
+    if (error) {
+      console.error("[createClient Error]:", error);
+      throw error;
+    }
     return { id: row.id };
   });
 
@@ -111,8 +114,11 @@ export const updateClient = createServerFn({ method: "POST" })
   .inputValidator((v) => clientSchema.extend({ id: z.string().uuid() }).parse(v))
   .handler(async ({ data, context }) => {
     const { id, ...rest } = data;
-    const { error } = await context.supabase.from("clients").update(rest).eq("id", id);
-    if (error) throw error;
+    const { error } = await context.supabase.from("clients").update(rest as any).eq("id", id);
+    if (error) {
+      console.error("[updateClient Error]:", error);
+      throw error;
+    }
     return { ok: true };
   });
 

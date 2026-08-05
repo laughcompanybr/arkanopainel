@@ -32,6 +32,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
   async ({ next }) => {
+    try {
     
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -105,5 +106,9 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
         claims: data.claims,
       },
     });
+    } catch (err) {
+      console.error("[Auth Middleware Error]:", err);
+      throw err;
+    }
   },
 );

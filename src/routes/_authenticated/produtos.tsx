@@ -77,7 +77,7 @@ type Row = {
   stock_qty: number | null;
   min_stock: number | null;
   status: string;
-  image_url: string | null;
+  
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -175,7 +175,6 @@ function ProdutosPage() {
         stock_qty: editing.stock_qty ?? 0,
         min_stock: editing.min_stock ?? 0,
         status: (editing.status as ProductStatus) ?? "active",
-        image_url: editing.image_url ?? "",
       }
     : undefined;
 

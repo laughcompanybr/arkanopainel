@@ -10,10 +10,18 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
     if (error != null && typeof error === "object" && "statusCode" in error) {
       throw error;
     }
-    console.error(error);
+    
+    // Log the error for observability
+    console.error("[Request Error]:", error);
+    
+    // In production, we don't want to leak internal error details to the user
+    // but we can show a structured error page.
     return new Response(renderErrorPage(), {
       status: 500,
-      headers: { "content-type": "text/html; charset=utf-8" },
+      headers: { 
+        "content-type": "text/html; charset=utf-8",
+        "X-Error-Ref": Date.now().toString() 
+      },
     });
   }
 });

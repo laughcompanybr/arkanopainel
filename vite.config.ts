@@ -53,4 +53,28 @@ export default defineConfig({
     server: { entry: "server" },
   },
   plugins: [stripTsdSourcePlugin()],
+  vite: {
+    build: {
+      target: 'esnext',
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+      } as any,
+      rollupOptions: {
+        output: {
+          manualChunks: (id: string) => {
+            if (id.includes('node_modules')) {
+              if (id.includes('react')) return 'vendor-react';
+              if (id.includes('@tanstack')) return 'vendor-tanstack';
+              if (id.includes('lucide-react') || id.includes('framer-motion')) return 'vendor-ui';
+              return 'vendor';
+            }
+          },
+        },
+      },
+    },
+  },
 });

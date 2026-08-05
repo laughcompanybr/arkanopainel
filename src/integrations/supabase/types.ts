@@ -129,7 +129,7 @@ export type Database = {
           district: string | null
           id: string
           instagram: string | null
-          name: string
+          name: string | null
           notes: string | null
           number: string | null
           phone: string | null
@@ -150,7 +150,7 @@ export type Database = {
           district?: string | null
           id?: string
           instagram?: string | null
-          name: string
+          name?: string | null
           notes?: string | null
           number?: string | null
           phone?: string | null
@@ -171,7 +171,7 @@ export type Database = {
           district?: string | null
           id?: string
           instagram?: string | null
-          name?: string
+          name?: string | null
           notes?: string | null
           number?: string | null
           phone?: string | null
@@ -379,6 +379,69 @@ export type Database = {
           id?: string
           used_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      monthly_report_overrides: {
+        Row: {
+          created_at: string | null
+          expenses_override: number | null
+          id: string
+          month: number
+          orders_count_override: number | null
+          profit_override: number | null
+          revenue_override: number | null
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          expenses_override?: number | null
+          id?: string
+          month: number
+          orders_count_override?: number | null
+          profit_override?: number | null
+          revenue_override?: number | null
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          expenses_override?: number | null
+          id?: string
+          month?: number
+          orders_count_override?: number | null
+          profit_override?: number | null
+          revenue_override?: number | null
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: []
+      }
+      monthly_reports: {
+        Row: {
+          created_at: string
+          id: string
+          month: number
+          observations: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: number
+          observations?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: number
+          observations?: string | null
+          updated_at?: string
+          year?: number
         }
         Relationships: []
       }
@@ -871,7 +934,7 @@ export type Database = {
           email: string | null
           id: string
           instagram: string | null
-          name: string
+          name: string | null
           notes: string | null
           phone: string | null
           updated_at: string
@@ -886,7 +949,7 @@ export type Database = {
           email?: string | null
           id?: string
           instagram?: string | null
-          name: string
+          name?: string | null
           notes?: string | null
           phone?: string | null
           updated_at?: string
@@ -901,13 +964,113 @@ export type Database = {
           email?: string | null
           id?: string
           instagram?: string | null
-          name?: string
+          name?: string | null
           notes?: string | null
           phone?: string | null
           updated_at?: string
           whatsapp?: string | null
         }
         Relationships: []
+      }
+      tasks: {
+        Row: {
+          client_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          description: string | null
+          due_date: string | null
+          due_time: string | null
+          id: string
+          priority: string
+          responsible_id: string | null
+          status: string
+          title: string
+          type: string
+          updated_at: string | null
+          user_id: string | null
+          version: number
+        }
+        Insert: {
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          priority?: string
+          responsible_id?: string | null
+          status?: string
+          title: string
+          type?: string
+          updated_at?: string | null
+          user_id?: string | null
+          version?: number
+        }
+        Update: {
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          priority?: string
+          responsible_id?: string | null
+          status?: string
+          title?: string
+          type?: string
+          updated_at?: string | null
+          user_id?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks_audit_log: {
+        Row: {
+          changed_at: string | null
+          changed_by: string | null
+          field_name: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          task_id: string | null
+        }
+        Insert: {
+          changed_at?: string | null
+          changed_by?: string | null
+          field_name: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          task_id?: string | null
+        }
+        Update: {
+          changed_at?: string | null
+          changed_by?: string | null
+          field_name?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_audit_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -983,6 +1146,14 @@ export type Database = {
         | "separating"
         | "shipped"
       payment_direction: "in" | "out"
+      task_priority: "low" | "medium" | "high" | "urgent"
+      task_type:
+        | "call"
+        | "meeting"
+        | "return"
+        | "follow_up"
+        | "proposal"
+        | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1139,6 +1310,15 @@ export const Constants = {
         "shipped",
       ],
       payment_direction: ["in", "out"],
+      task_priority: ["low", "medium", "high", "urgent"],
+      task_type: [
+        "call",
+        "meeting",
+        "return",
+        "follow_up",
+        "proposal",
+        "other",
+      ],
     },
   },
 } as const
