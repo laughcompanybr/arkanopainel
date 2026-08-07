@@ -100,7 +100,7 @@ export function SupplierDetailSheet({ supplierId, open, onOpenChange }: Props) {
                 {editing ? (
                   <SupplierForm
                     defaultValues={{
-                      name: supplier.name || "",
+                      name: supplier.name ?? "",
                       company: supplier.company ?? "",
                       email: supplier.email ?? "",
                       phone: supplier.phone ?? "",

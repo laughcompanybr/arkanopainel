@@ -118,15 +118,84 @@ export type Database = {
           },
         ]
       }
+      client_interactions: {
+        Row: {
+          actor_id: string | null
+          client_id: string | null
+          created_at: string
+          id: string
+          message: string | null
+          meta: Json | null
+          type: string
+        }
+        Insert: {
+          actor_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          meta?: Json | null
+          type: string
+        }
+        Update: {
+          actor_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          meta?: Json | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_interactions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_tags: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          tag: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          tag: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          tag?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_tags_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           city: string | null
+          company_name: string | null
           complement: string | null
           cpf: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
           district: string | null
+          email: string | null
           id: string
           instagram: string | null
           name: string | null
@@ -134,7 +203,10 @@ export type Database = {
           number: string | null
           phone: string | null
           reference: string | null
+          responsible_id: string | null
+          source: string | null
           state: string | null
+          status: Database["public"]["Enums"]["client_status"]
           street: string | null
           updated_at: string
           whatsapp: string | null
@@ -142,12 +214,14 @@ export type Database = {
         }
         Insert: {
           city?: string | null
+          company_name?: string | null
           complement?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           district?: string | null
+          email?: string | null
           id?: string
           instagram?: string | null
           name?: string | null
@@ -155,7 +229,10 @@ export type Database = {
           number?: string | null
           phone?: string | null
           reference?: string | null
+          responsible_id?: string | null
+          source?: string | null
           state?: string | null
+          status?: Database["public"]["Enums"]["client_status"]
           street?: string | null
           updated_at?: string
           whatsapp?: string | null
@@ -163,12 +240,14 @@ export type Database = {
         }
         Update: {
           city?: string | null
+          company_name?: string | null
           complement?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           district?: string | null
+          email?: string | null
           id?: string
           instagram?: string | null
           name?: string | null
@@ -176,7 +255,10 @@ export type Database = {
           number?: string | null
           phone?: string | null
           reference?: string | null
+          responsible_id?: string | null
+          source?: string | null
           state?: string | null
+          status?: Database["public"]["Enums"]["client_status"]
           street?: string | null
           updated_at?: string
           whatsapp?: string | null
@@ -1130,6 +1212,7 @@ export type Database = {
         | "health"
         | "restaurant"
         | "other"
+      client_status: "lead" | "prospect" | "active" | "inactive" | "lost"
       fin_direction: "in" | "out"
       fin_tx_status: "pending" | "paid" | "overdue" | "cancelled"
       order_status:
@@ -1293,6 +1376,7 @@ export const Constants = {
         "restaurant",
         "other",
       ],
+      client_status: ["lead", "prospect", "active", "inactive", "lost"],
       fin_direction: ["in", "out"],
       fin_tx_status: ["pending", "paid", "overdue", "cancelled"],
       order_status: [

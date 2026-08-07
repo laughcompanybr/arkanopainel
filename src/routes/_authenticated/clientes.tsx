@@ -218,7 +218,7 @@ function ClientesPage() {
                 <TableRow>
                   <TableHead>
                     <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort("name")}>
-                      Cliente <ArrowUpDown className="size-3" />
+                      Cliente / Empresa <ArrowUpDown className="size-3" />
                     </button>
                   </TableHead>
                   <TableHead>Status</TableHead>
@@ -241,10 +241,12 @@ function ClientesPage() {
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        {c.name || "Sem nome"}
+                        {c.name}
                         {c.deleted_at ? <Badge variant="outline" className="text-[10px]">removido</Badge> : null}
                       </div>
-                      {c.cpf ? (
+                      {(c as any).company_name ? (
+                        <p className="text-xs text-muted-foreground">{(c as any).company_name}</p>
+                      ) : c.cpf ? (
                         <p className="text-xs text-muted-foreground">CPF {c.cpf}</p>
                       ) : null}
                     </TableCell>

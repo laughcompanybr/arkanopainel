@@ -15,7 +15,6 @@ export function ArkanoLogo({ size = 36, className, showWordmark = true }: Arkano
         alt="Arkano Club"
         width={size}
         height={size}
-        loading="lazy"
         className="rounded-lg ring-1 ring-border object-cover"
         style={{ width: size, height: size }}
       />

@@ -87,7 +87,7 @@ export function ClientDetailSheet({ clientId, open, onOpenChange }: Props) {
                 <ClientForm
                   defaultValues={{
                     name: client.name,
-                    
+                    company_name: (client as any).company_name ?? "",
                     status: (client as any).status ?? "lead",
                     email: (client as any).email ?? "",
                     cpf: client.cpf ?? "",
@@ -124,7 +124,7 @@ export function ClientDetailSheet({ clientId, open, onOpenChange }: Props) {
                         </Badge>
                       </dd>
                     </div>
-                    
+                    <Info label="Empresa" value={(client as any).company_name} />
                     <Info label="E-mail" value={(client as any).email} />
                     <Info label="CPF" value={client.cpf} />
                     <Info label="Telefone" value={client.phone} />

@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
-import { getMonthlyReport, updateMonthlyObservations, updateMonthlyOverrides } from "@/features/reports/monthly.functions";
+import { useSuspenseQuery, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getMonthlyReport, updateMonthlyReport } from "@/features/reports/monthly.functions";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatBRL, formatDate } from "@/lib/format";
 import { 
   TrendingUp, 
@@ -22,8 +24,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, Suspense, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, Suspense } from "react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +49,6 @@ function MonthlyReportDetailPage() {
   const { year, month } = Route.useParams();
   const y = parseInt(year);
   const m = parseInt(month);
-  const [isEditing, setIsEditing] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -66,242 +66,82 @@ function MonthlyReportDetailPage() {
           />
         </div>
         <div className="flex gap-2">
-           <Button 
-             variant={isEditing ? "default" : "secondary"} 
-             size="sm" 
-             onClick={() => setIsEditing(!isEditing)}
-             className={!isEditing ? "bg-primary/10 text-primary hover:bg-primary/20" : ""}
-           >
-             {isEditing ? "Cancelar Edição" : "Editar Dados do Mês"}
-           </Button>
            <Button variant="outline" size="sm" asChild>
              <Link to="/pedidos">
                <Plus className="mr-2 size-4" /> Novo Pedido
              </Link>
            </Button>
+           <Button variant="outline" size="sm" asChild>
+             <Link to="/financeiro">
+               <ReceiptText className="mr-2 size-4" /> Novo Lançamento
+             </Link>
+           </Button>
         </div>
       </div>
 
-      <Suspense fallback={<ReportSkeleton />}>
-        <ReportContent 
-          year={y} 
-          month={m} 
-          isEditing={isEditing} 
-          setIsEditing={setIsEditing} 
-        />
+      <Suspense key={`${y}-${m}`} fallback={<ReportSkeleton />}>
+        <ReportContent key={`${y}-${m}`} year={y} month={m} />
       </Suspense>
     </div>
   );
 }
 
-function ReportContent({ 
-  year, 
-  month,
-  isEditing,
-  setIsEditing
-}: { 
-  year: number; 
-  month: number;
-  isEditing: boolean;
-  setIsEditing: (val: boolean) => void;
-}) {
+function ReportContent({ year, month }: { year: number; month: number }) {
+  const qc = useQueryClient();
   const fetchReport = useServerFn(getMonthlyReport);
-  const updateObs = useServerFn(updateMonthlyObservations);
-  const updateOverrides = useServerFn(updateMonthlyOverrides);
-  const { data, refetch, isRefetching, error } = useSuspenseQuery(reportQueryOptions(year, month, fetchReport));
-  
-  useEffect(() => {
-    if (error) {
-      toast.error("Erro ao carregar detalhes do mês. Tente novamente.");
-    }
-  }, [error]);
-  const [obs, setObs] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  
-  const [editForm, setEditForm] = useState({
-    revenue: 0,
-    expenses: 0,
-    profit: 0,
-    ordersCount: 0
+  const saveReport = useServerFn(updateMonthlyReport);
+  const { data } = useSuspenseQuery(reportQueryOptions(year, month, fetchReport));
+
+  const [obs, setObs] = useState(data.observations ?? "");
+  const [revenueOv, setRevenueOv] = useState(
+    data.overrides.revenue_override != null ? String(data.overrides.revenue_override) : "",
+  );
+  const [expensesOv, setExpensesOv] = useState(
+    data.overrides.expenses_override != null ? String(data.overrides.expenses_override) : "",
+  );
+  const [profitOv, setProfitOv] = useState(
+    data.overrides.profit_override != null ? String(data.overrides.profit_override) : "",
+  );
+  const [ordersOv, setOrdersOv] = useState(
+    data.overrides.orders_count_override != null ? String(data.overrides.orders_count_override) : "",
+  );
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      saveReport({
+        data: {
+          year,
+          month,
+          observations: obs.trim() === "" ? null : obs,
+          revenue_override: revenueOv,
+          expenses_override: expensesOv,
+          profit_override: profitOv,
+          orders_count_override: ordersOv,
+        },
+      }),
+    onSuccess: async () => {
+      toast.success("Relatório do mês salvo!");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["monthly-report", year, month] }),
+        qc.invalidateQueries({ queryKey: ["monthly-summary"] }),
+        qc.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao salvar o relatório."),
   });
 
-  useEffect(() => {
-    if (data) {
-      setObs(data.observations || "");
-      // Safety: Ensure overrides property is handled if needed
-      setEditForm({
-        revenue: typeof data.revenue === 'number' ? data.revenue : 0,
-        expenses: typeof data.expenses === 'number' ? data.expenses : 0,
-        profit: typeof data.profit === 'number' ? data.profit : 0,
-        ordersCount: typeof data.ordersCount === 'number' ? data.ordersCount : 0
-      });
-    } else {
-      toast.error("Dados do relatório não encontrados para este período.");
-    }
-  }, [data]);
+  const isSaving = saveMut.isPending;
+  const handleSaveObs = () => saveMut.mutate();
 
-  const handleSaveOverrides = async () => {
-    if (editForm.revenue < 0 || editForm.expenses < 0 || editForm.ordersCount < 0) {
-      toast.error("Valores não podem ser negativos");
-      return;
-    }
-
-    try {
-      setIsSaving(true);
-      await updateOverrides({ 
-        data: { 
-          year, 
-          month, 
-          revenue: editForm.revenue,
-          expenses: editForm.expenses,
-          profit: editForm.profit,
-          ordersCount: editForm.ordersCount
-        } 
-      });
-      toast.success("Dados do mês atualizados com sucesso!");
-      setIsEditing(false);
-      refetch();
-    } catch (error) {
-      toast.error("Erro ao atualizar dados do mês.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleResetOverrides = async () => {
-    try {
-      setIsSaving(true);
-      await updateOverrides({ 
-        data: { 
-          year, 
-          month, 
-          revenue: null,
-          expenses: null,
-          profit: null,
-          ordersCount: null
-        } 
-      });
-      toast.success("Valores originais restaurados.");
-      setIsEditing(false);
-      refetch();
-    } catch (error) {
-      toast.error("Erro ao restaurar valores.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSaveObs = async () => {
-    try {
-      setIsSaving(true);
-      await updateObs({ data: { year, month, observations: obs } });
-      toast.success("Observações salvas com sucesso!");
-      refetch();
-    } catch (error) {
-      toast.error("Erro ao salvar observações.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
-      <AnimatePresence>
-        {isEditing && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <Card className="p-6 border-primary/50 bg-primary/5">
-              <div className="flex items-center gap-2 mb-4 text-primary font-display font-semibold">
-                <FileText className="size-5" />
-                Edição Manual de Metas & Realizados
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Receita Total</label>
-                  <div className="relative">
-                    <TrendingUp className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input 
-                      type="number" 
-                      className="w-full bg-background border rounded-lg px-9 py-2 text-sm focus:ring-2 focus:ring-primary outline-none transition-all"
-                      value={editForm.revenue}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        setEditForm(prev => ({ ...prev, revenue: isNaN(val) ? 0 : val }));
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Despesas</label>
-                  <div className="relative">
-                    <ReceiptText className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input 
-                      type="number" 
-                      className="w-full bg-background border rounded-lg px-9 py-2 text-sm focus:ring-2 focus:ring-primary outline-none transition-all"
-                      value={editForm.expenses}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        setEditForm(prev => ({ ...prev, expenses: isNaN(val) ? 0 : val }));
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lucro Líquido</label>
-                  <div className="relative">
-                    <CircleDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input 
-                      type="number" 
-                      className="w-full bg-background border rounded-lg px-9 py-2 text-sm focus:ring-2 focus:ring-primary outline-none transition-all"
-                      value={editForm.profit}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        setEditForm(prev => ({ ...prev, profit: isNaN(val) ? 0 : val }));
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Pedidos</label>
-                  <div className="relative">
-                    <Package className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input 
-                      type="number" 
-                      className="w-full bg-background border rounded-lg px-9 py-2 text-sm focus:ring-2 focus:ring-primary outline-none transition-all"
-                      value={editForm.ordersCount}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        setEditForm(prev => ({ ...prev, ordersCount: isNaN(val) ? 0 : val }));
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 border-t pt-4">
-                <Button variant="ghost" size="sm" onClick={handleResetOverrides} disabled={isSaving}>
-                  Restaurar Original
-                </Button>
-                <Button size="sm" onClick={handleSaveOverrides} disabled={isSaving} className="gap-2">
-                  {isSaving ? "Salvando..." : <><TrendingUp className="size-4" /> Atualizar Dashboard</>}
-                </Button>
-              </div>
-              <p className="mt-3 text-[10px] text-muted-foreground italic">
-                * Valores editados manualmente terão prioridade sobre os cálculos automáticos no Dashboard e Relatórios.
-              </p>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
       {/* Overview KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Receita Total" value={formatBRL(data.revenue)} icon={TrendingUp} color="text-blue-500" loading={isRefetching} />
-        <KpiCard label="Lucro Líquido" value={formatBRL(data.profit)} icon={CircleDollarSign} color={data.profit >= 0 ? "text-emerald-500" : "text-rose-500"} loading={isRefetching} />
-        <KpiCard label="Despesas" value={formatBRL(data.expenses)} icon={ReceiptText} color="text-rose-500" loading={isRefetching} />
-        <KpiCard label="Novos Clientes" value={data.newClients.toString()} icon={Users} color="text-amber-500" loading={isRefetching} />
+        <KpiCard label="Receita Total" value={formatBRL(data.revenue)} icon={TrendingUp} color="text-blue-500" />
+        <KpiCard label="Lucro Líquido" value={formatBRL(data.profit)} icon={CircleDollarSign} color={data.profit >= 0 ? "text-emerald-500" : "text-rose-500"} />
+        <KpiCard label="Despesas" value={formatBRL(data.expenses)} icon={ReceiptText} color="text-rose-500" />
+        <KpiCard label="Novos Clientes" value={data.newClients.toString()} icon={Users} color="text-amber-500" />
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
@@ -355,26 +195,44 @@ function ReportContent({
               </div>
             </Card>
 
-            {/* Observations */}
+            {/* Edição do mês */}
             <Card className="p-6">
               <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold">
                 <FileText className="size-5" />
-                Observações
+                Editar mês
               </h3>
               <Textarea
                 placeholder="Notas operacionais sobre este mês..."
-                className="min-h-[140px] resize-none border-dashed bg-muted/20"
+                className="min-h-[100px] resize-none border-dashed bg-muted/20"
                 value={obs}
                 onChange={(e) => setObs(e.target.value)}
               />
-            <Button 
-                className="mt-4 w-full" 
-                onClick={handleSaveObs} 
-                disabled={isSaving}
-              >
-                {isSaving ? "Salvando..." : "Salvar Notas do Mês"}
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="revenue-ov" className="text-xs">Receita</Label>
+                  <Input id="revenue-ov" inputMode="decimal" placeholder="automático" value={revenueOv} onChange={(e) => setRevenueOv(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="expenses-ov" className="text-xs">Despesas</Label>
+                  <Input id="expenses-ov" inputMode="decimal" placeholder="automático" value={expensesOv} onChange={(e) => setExpensesOv(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="profit-ov" className="text-xs">Lucro</Label>
+                  <Input id="profit-ov" inputMode="decimal" placeholder="automático" value={profitOv} onChange={(e) => setProfitOv(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="orders-ov" className="text-xs">Pedidos</Label>
+                  <Input id="orders-ov" inputMode="numeric" placeholder="automático" value={ordersOv} onChange={(e) => setOrdersOv(e.target.value)} />
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Deixe em branco para usar os valores calculados automaticamente.
+              </p>
+              <Button className="mt-4 w-full" onClick={handleSaveObs} disabled={isSaving}>
+                {isSaving ? "Salvando..." : "Salvar mês"}
               </Button>
             </Card>
+
           </div>
         </TabsContent>
 
@@ -492,8 +350,7 @@ function ReportContent({
   );
 }
 
-function KpiCard({ label, value, icon: Icon, color, loading }: { label: string; value: string; icon: any; color: string; loading?: boolean }) {
-  if (loading) return <Skeleton className="h-32 w-full" />;
+function KpiCard({ label, value, icon: Icon, color }: { label: string; value: string; icon: any; color: string }) {
   return (
     <Card className="p-6 relative overflow-hidden group">
       <div className="flex items-center justify-between relative z-10">

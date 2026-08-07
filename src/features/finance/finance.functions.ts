@@ -26,7 +26,6 @@ export const getCashFlow = createServerFn({ method: "POST" })
   .inputValidator((v) => dateRangeSchema.parse(v))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    if (!data.from || !data.to) throw new Error("Intervalo de datas é obrigatório");
     const fromISO = toISO(data.from);
     const toEndISO = toISO(data.to, true);
 

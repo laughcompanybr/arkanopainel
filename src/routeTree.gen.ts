@@ -18,7 +18,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRelatoriosRouteImport } from './routes/_authenticated/relatorios'
 import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticated/produtos'
 import { Route as AuthenticatedPedidosRouteImport } from './routes/_authenticated/pedidos'
-import { Route as AuthenticatedMensaisRouteImport } from './routes/_authenticated/mensais'
 import { Route as AuthenticatedFuncionariosRouteImport } from './routes/_authenticated/funcionarios'
 import { Route as AuthenticatedFornecedoresRouteImport } from './routes/_authenticated/fornecedores'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
@@ -26,6 +25,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 import { Route as AuthenticatedAgendaRouteImport } from './routes/_authenticated/agenda'
+import { Route as AuthenticatedMensaisIndexRouteImport } from './routes/_authenticated/mensais.index'
 import { Route as AuthenticatedMensaisYearMonthRouteImport } from './routes/_authenticated/mensais.$year.$month'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -72,11 +72,6 @@ const AuthenticatedPedidosRoute = AuthenticatedPedidosRouteImport.update({
   path: '/pedidos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedMensaisRoute = AuthenticatedMensaisRouteImport.update({
-  id: '/mensais',
-  path: '/mensais',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedFuncionariosRoute =
   AuthenticatedFuncionariosRouteImport.update({
     id: '/funcionarios',
@@ -115,11 +110,17 @@ const AuthenticatedAgendaRoute = AuthenticatedAgendaRouteImport.update({
   path: '/agenda',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMensaisIndexRoute =
+  AuthenticatedMensaisIndexRouteImport.update({
+    id: '/mensais/',
+    path: '/mensais/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMensaisYearMonthRoute =
   AuthenticatedMensaisYearMonthRouteImport.update({
-    id: '/$year/$month',
-    path: '/$year/$month',
-    getParentRoute: () => AuthenticatedMensaisRoute,
+    id: '/mensais/$year/$month',
+    path: '/mensais/$year/$month',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -135,10 +136,10 @@ export interface FileRoutesByFullPath {
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/fornecedores': typeof AuthenticatedFornecedoresRoute
   '/funcionarios': typeof AuthenticatedFuncionariosRoute
-  '/mensais': typeof AuthenticatedMensaisRouteWithChildren
   '/pedidos': typeof AuthenticatedPedidosRoute
   '/produtos': typeof AuthenticatedProdutosRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
+  '/mensais/': typeof AuthenticatedMensaisIndexRoute
   '/mensais/$year/$month': typeof AuthenticatedMensaisYearMonthRoute
 }
 export interface FileRoutesByTo {
@@ -154,10 +155,10 @@ export interface FileRoutesByTo {
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/fornecedores': typeof AuthenticatedFornecedoresRoute
   '/funcionarios': typeof AuthenticatedFuncionariosRoute
-  '/mensais': typeof AuthenticatedMensaisRouteWithChildren
   '/pedidos': typeof AuthenticatedPedidosRoute
   '/produtos': typeof AuthenticatedProdutosRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
+  '/mensais': typeof AuthenticatedMensaisIndexRoute
   '/mensais/$year/$month': typeof AuthenticatedMensaisYearMonthRoute
 }
 export interface FileRoutesById {
@@ -175,10 +176,10 @@ export interface FileRoutesById {
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
   '/_authenticated/fornecedores': typeof AuthenticatedFornecedoresRoute
   '/_authenticated/funcionarios': typeof AuthenticatedFuncionariosRoute
-  '/_authenticated/mensais': typeof AuthenticatedMensaisRouteWithChildren
   '/_authenticated/pedidos': typeof AuthenticatedPedidosRoute
   '/_authenticated/produtos': typeof AuthenticatedProdutosRoute
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRoute
+  '/_authenticated/mensais/': typeof AuthenticatedMensaisIndexRoute
   '/_authenticated/mensais/$year/$month': typeof AuthenticatedMensaisYearMonthRoute
 }
 export interface FileRouteTypes {
@@ -196,10 +197,10 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/fornecedores'
     | '/funcionarios'
-    | '/mensais'
     | '/pedidos'
     | '/produtos'
     | '/relatorios'
+    | '/mensais/'
     | '/mensais/$year/$month'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -215,10 +216,10 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/fornecedores'
     | '/funcionarios'
-    | '/mensais'
     | '/pedidos'
     | '/produtos'
     | '/relatorios'
+    | '/mensais'
     | '/mensais/$year/$month'
   id:
     | '__root__'
@@ -235,10 +236,10 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro'
     | '/_authenticated/fornecedores'
     | '/_authenticated/funcionarios'
-    | '/_authenticated/mensais'
     | '/_authenticated/pedidos'
     | '/_authenticated/produtos'
     | '/_authenticated/relatorios'
+    | '/_authenticated/mensais/'
     | '/_authenticated/mensais/$year/$month'
   fileRoutesById: FileRoutesById
 }
@@ -316,13 +317,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPedidosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/mensais': {
-      id: '/_authenticated/mensais'
-      path: '/mensais'
-      fullPath: '/mensais'
-      preLoaderRoute: typeof AuthenticatedMensaisRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/funcionarios': {
       id: '/_authenticated/funcionarios'
       path: '/funcionarios'
@@ -372,26 +366,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAgendaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/mensais/': {
+      id: '/_authenticated/mensais/'
+      path: '/mensais'
+      fullPath: '/mensais/'
+      preLoaderRoute: typeof AuthenticatedMensaisIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/mensais/$year/$month': {
       id: '/_authenticated/mensais/$year/$month'
-      path: '/$year/$month'
+      path: '/mensais/$year/$month'
       fullPath: '/mensais/$year/$month'
       preLoaderRoute: typeof AuthenticatedMensaisYearMonthRouteImport
-      parentRoute: typeof AuthenticatedMensaisRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
-
-interface AuthenticatedMensaisRouteChildren {
-  AuthenticatedMensaisYearMonthRoute: typeof AuthenticatedMensaisYearMonthRoute
-}
-
-const AuthenticatedMensaisRouteChildren: AuthenticatedMensaisRouteChildren = {
-  AuthenticatedMensaisYearMonthRoute: AuthenticatedMensaisYearMonthRoute,
-}
-
-const AuthenticatedMensaisRouteWithChildren =
-  AuthenticatedMensaisRoute._addFileChildren(AuthenticatedMensaisRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAgendaRoute: typeof AuthenticatedAgendaRoute
@@ -401,10 +391,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
   AuthenticatedFornecedoresRoute: typeof AuthenticatedFornecedoresRoute
   AuthenticatedFuncionariosRoute: typeof AuthenticatedFuncionariosRoute
-  AuthenticatedMensaisRoute: typeof AuthenticatedMensaisRouteWithChildren
   AuthenticatedPedidosRoute: typeof AuthenticatedPedidosRoute
   AuthenticatedProdutosRoute: typeof AuthenticatedProdutosRoute
   AuthenticatedRelatoriosRoute: typeof AuthenticatedRelatoriosRoute
+  AuthenticatedMensaisIndexRoute: typeof AuthenticatedMensaisIndexRoute
+  AuthenticatedMensaisYearMonthRoute: typeof AuthenticatedMensaisYearMonthRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -415,10 +406,11 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
   AuthenticatedFornecedoresRoute: AuthenticatedFornecedoresRoute,
   AuthenticatedFuncionariosRoute: AuthenticatedFuncionariosRoute,
-  AuthenticatedMensaisRoute: AuthenticatedMensaisRouteWithChildren,
   AuthenticatedPedidosRoute: AuthenticatedPedidosRoute,
   AuthenticatedProdutosRoute: AuthenticatedProdutosRoute,
   AuthenticatedRelatoriosRoute: AuthenticatedRelatoriosRoute,
+  AuthenticatedMensaisIndexRoute: AuthenticatedMensaisIndexRoute,
+  AuthenticatedMensaisYearMonthRoute: AuthenticatedMensaisYearMonthRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -435,13 +427,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

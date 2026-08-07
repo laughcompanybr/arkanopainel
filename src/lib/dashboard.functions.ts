@@ -63,7 +63,7 @@ export const getDashboardStats = createServerFn({ method: "GET" })
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-    const [ordersRes, clientsRes, paymentsRes, expensesRes, eventsRes, tasksRes, overridesRes] = await Promise.all([
+    const [ordersRes, clientsRes, paymentsRes, expensesRes, eventsRes, tasksRes] = await Promise.all([
       supabase
         .from("orders")
         .select(
@@ -79,34 +79,11 @@ export const getDashboardStats = createServerFn({ method: "GET" })
         .order("created_at", { ascending: false })
         .limit(12),
       (supabase as any).from("tasks").select("*").eq("status", "pending").gte("due_date", now.toISOString().slice(0, 10)).limit(10),
-      (supabase as any).from("monthly_report_overrides").select("*").gte("year", now.getFullYear() - 1),
-    ]).catch(err => {
-      console.error("[Dashboard Critical Query Failure]:", err);
-      throw err;
-    });
+    ]);
 
-    if (ordersRes.error) {
-      console.error("[Dashboard: orders fetch failed]", ordersRes.error);
-      throw ordersRes.error;
-    }
-    if (paymentsRes.error) {
-      console.error("[Dashboard: payments fetch failed]", paymentsRes.error);
-      throw paymentsRes.error;
-    }
-    if (eventsRes.error) {
-      console.error("[Dashboard: events fetch failed]", eventsRes.error);
-      throw eventsRes.error;
-    }
-    
-    // Non-critical failures log errors but don't crash
-    if (tasksRes.error && tasksRes.error.code !== 'PGRST116') {
-       console.error("[Dashboard Non-Critical: tasks fetch failed]", tasksRes.error);
-    }
-    if (overridesRes.error) {
-      console.error("[Dashboard Non-Critical: overrides fetch failed]", overridesRes.error);
-    }
-    
-    const overrides = (overridesRes.data || []) as any[];
+    if (ordersRes.error) throw ordersRes.error;
+    if (paymentsRes.error) throw paymentsRes.error;
+    if (eventsRes.error) throw eventsRes.error;
 
     const orders = ordersRes.data ?? [];
     const payments = paymentsRes.data ?? [];
@@ -263,35 +240,14 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       return new Date(c.last_interaction_at) < thirtyDaysAgo;
     }).length;
 
-    const curOverride = overrides.find(o => o?.year === now.getFullYear() && o?.month === (now.getMonth() + 1));
-
-    // Fallback safe calculations
-    const finalRevenueMonth = (curOverride?.revenue_override !== null && curOverride?.revenue_override !== undefined) 
-      ? Number(curOverride.revenue_override) 
-      : (revenueMonth || 0);
-      
-    const finalExpensesMonth = (curOverride?.expenses_override !== null && curOverride?.expenses_override !== undefined) 
-      ? Number(curOverride.expenses_override) 
-      : (expensesMonth || 0);
-      
-    const finalProfitMonth = (curOverride?.profit_override !== null && curOverride?.profit_override !== undefined) 
-      ? Number(curOverride.profit_override) 
-      : (profitNetMonth || 0);
-      
-    const finalOrdersMonth = (curOverride?.orders_count_override !== null && curOverride?.orders_count_override !== undefined) 
-      ? Number(curOverride.orders_count_override) 
-      : (ordersMonth || 0);
-
     return {
-      revenueMonth: finalRevenueMonth,
-      profitMonth: finalProfitMonth,
-      profitGrossMonth: (curOverride?.revenue_override !== null && curOverride?.revenue_override !== undefined) 
-        ? Number(curOverride.revenue_override) 
-        : (profitGrossMonth || 0),
-      expensesMonth: finalExpensesMonth,
-      receivable: receivable || 0,
-      payable: payable || 0,
-      ordersMonth: finalOrdersMonth,
+      revenueMonth,
+      profitMonth: profitNetMonth,
+      profitGrossMonth,
+      expensesMonth,
+      receivable,
+      payable,
+      ordersMonth,
       clientsTotal: clientsRes.count ?? 0,
       avgTicket,
       avgProfit,
@@ -309,19 +265,12 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       monthComparison,
       topProducts,
       pipeline,
-      monthly: months.map(({ key, label, revenue, profit, orders: o }) => {
-        const [yStr, mStr] = key.split("-");
-        const y = parseInt(yStr);
-        const m = parseInt(mStr);
-        const ovr = overrides.find(ov => ov.year === y && ov.month === m);
-        
-        return {
-          month: label,
-          revenue: (ovr?.revenue_override !== null && ovr?.revenue_override !== undefined) ? Number(ovr.revenue_override) : (revenue || 0),
-          profit: (ovr?.profit_override !== null && ovr?.profit_override !== undefined) ? Number(ovr.profit_override) : (profit || 0),
-          orders: (ovr?.orders_count_override !== null && ovr?.orders_count_override !== undefined) ? Number(ovr.orders_count_override) : (o || 0),
-        };
-      }),
+      monthly: months.map(({ label, revenue, profit, orders: o }) => ({
+        month: label,
+        revenue,
+        profit,
+        orders: o,
+      })),
       activity,
     };
   });

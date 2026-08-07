@@ -82,9 +82,7 @@ export function ClientForm({ defaultValues, submitLabel = "Salvar", onSubmit, on
 
   const field = (name: keyof ClientInput, label: string, extra?: React.InputHTMLAttributes<HTMLInputElement>) => (
     <div className="space-y-1.5">
-      <Label htmlFor={name}>
-        {label}
-      </Label>
+      <Label htmlFor={name}>{label}</Label>
       <Input id={name} {...register(name)} {...extra} />
       {errors[name] ? <p className="text-xs text-destructive">{errors[name]?.message as string}</p> : null}
     </div>
@@ -98,7 +96,8 @@ export function ClientForm({ defaultValues, submitLabel = "Salvar", onSubmit, on
       className="space-y-5"
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        {field("name", "Nome completo", { placeholder: "Deixe em branco se for opcional" })}
+        {field("name", "Nome completo *")}
+        {field("company_name", "Empresa")}
         <div className="space-y-1.5">
           <Label htmlFor="status">Status</Label>
           <select
