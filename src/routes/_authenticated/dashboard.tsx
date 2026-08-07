@@ -169,17 +169,6 @@ function DashboardContent() {
 
   return (
     <div className="space-y-4">
-      {/* CRM ALERTS */}
-      {data.crm.atRiskClients > 0 && (
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning"
-        >
-          <Activity className="size-5" />
-          <p>Você possui <strong>{data.crm.atRiskClients}</strong> clientes sem contato há mais de 30 dias.</p>
-        </motion.div>
-      )}
 
       {/* HERO KPIs — dense bento row */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
